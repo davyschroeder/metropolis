@@ -179,7 +179,7 @@
       }
       if (nf > 0.2) { g.globalCompositeOperation = 'lighter'; g.drawImage(glow, cxp - 40, cyp - 50, 80, 80); g.globalCompositeOperation = 'source-over'; }
     }
-    if (Cam.zoom > 0.55) {
+    if (Cam.zoom > 0.55 && !Rn.hideIcons) {
       let ic = 0;
       if (b.fire) ic = 0; else if (b.dmg) ic = 5; else if (b.z && b.ab) ic = 0; else if (b.rd === -1 && b.rv && (b.z || M.needsRoad(M.DEFS[b.t]))) ic = 3; else if (b.pw === false) ic = 1; else if (b.wt === false && (b.z ? b.lvl >= 1 : true)) ic = 2; else if (!b.z && b.noNet && M.DEFS[b.t].water) ic = 3; else if (b.t === 'busstop' && b.busOK === false) ic = 4;
       if (ic) icons.push(cxp, cyp - 30 - Math.min(40, sp.h * 0.25), ic);
