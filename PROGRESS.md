@@ -1,0 +1,154 @@
+# METROPOLIS – development progress
+
+Version 0.8.0 · last updated 17 Nov 2026 · ~4,300 dense lines of JavaScript/CSS in 26 modules, no dependencies.
+
+This file is the hand-over document. Read it first when continuing in a new session.
+
+## Status in one paragraph
+
+All six phases of the brief have a working implementation in breadth: you can start from empty land, lay
+roads, zone, connect utilities, provide services, manage a budget, and grow a village into a city with
+apartment blocks and towers, with saving and loading. Everything listed under "Implemented" is real
+simulation, not placeholder numbers. What is **not** yet proven is depth at the far end: the automated
+"mayor" bots only reach about 8,500 residents, so Major City / Metropolis / Megacity play and their balance
+are untested in practice. See "Known gaps" and "Not verified".
+
+## How to run and test
+
+* Play: open `index.html` (works from `file://`), or serve the folder from any static host.
+* `node test/sim-test.js [years]` – builds a scripted town and runs it for N years; checks growth, budget,
+  NaN-free maps, cohort consistency, save/load round trip, undo, all four disasters.
+* `node test/mechanics-test.js` – 57 focused assertions on individual mechanics.
+* `python3 test/ui-test.py` – drives the real interface in headless Chrome (42 checks, reports JS errors).
+* `python3 test/browser-test.py` – plays a city in headless Chrome and writes screenshots.
+
+The two Python tests need Playwright and a Chrome binary (path is at the top of each file).
+
+Last run of all four: all passing, 0 JavaScript errors.
+
+## Implemented and verified by tests
+
+| Area | What exists | Verified by |
+| --- | --- | --- |
+| Terrain | Seeded generation: sea on one edge or islands, river, lakes, beaches, 4 elevation levels, forests, rocks, flowers. Sizes 64–160. City limits that can be extended for money | sim-test, mechanics 3 |
+| Roads | 7 types incl. one-way, highway, pedestrian path; automatic intersections, bridges (5× cost), drag to build/upgrade, traffic lights on avenues/boulevards | mechanics 1 |
+| Pathfinding | A* on the road grid with congestion, signals, one-way rules, truck bans; connected-component cache | mechanics 1, 7 |
+| Zoning | R/C/I × 3 densities, 5 building levels each, automatic spawn/upgrade, merge to 2×2 lots, abandonment and recovery | sim-test, mechanics 3 |
+| Population | Cohorts (children/adults/seniors), births, deaths, ageing, migration, households, education levels, employment with skilled/unskilled matching, income, poverty, health | sim-test (cohorts always equal the sum of building residents) |
+| Happiness | 12 weighted factors per home; complaints derived from the worst ones | mechanics 4 |
+| Demand | R/C/I demand from jobs, purchasing power, unemployment, vacancy, taxes, happiness | sim-test, mechanics 4 |
+| Economy | Taxes per zone, district tax offsets, upkeep, department budgets 50–120 %, three loan sizes, early repayment, business cycle with recessions, bailout then bankruptcy, 20 years of history | mechanics 4 |
+| Electricity | Coal, gas, wind (weather-dependent), solar (weather-dependent), nuclear; roads and power lines conduct; 3-tile reach; brownouts with service priority | mechanics 2 |
+| Water | Pumps (need water nearby, hurt by pollution), towers, treatment plant; shortages | mechanics 2 |
+| Sewage & garbage | Sewage plants vs water pollution; landfills that fill up, recycling centres; garbage piles up per building | sim-test, mechanics 5 |
+| Services | Fire, police, clinic, hospital, elementary, high school, university, library, cemetery; coverage maps, capacities, upgrades (3 levels), budgets | mechanics 5 |
+| Environment | Air, ground, noise and water pollution, crime, land value (0–100), all as per-tile maps | mechanics 5 |
+| Traffic | Trip assignment home→work, home→shop, freight; congestion feeds back into routes, commute times, noise and air pollution | mechanics 7 |
+| Buses | Depots, stops, automatic routes, ridership, crowding, fares, free-transit policy | mechanics 7 |
+| Disasters | Building fires with fire engines that drive the real road network, spread, rubble; storm, flood, earthquake, firestorm; repairs cost money; can be disabled | mechanics 6, sim-test |
+| Districts & policies | 8 paintable, nameable districts with local tax; 12 policies city-wide or per district | mechanics 5, ui-test |
+| Progression | 7 city ranks with unlocks and grants, per-rank objectives with hints, 19 achievements, 3 scenarios + free play, sandbox, 3 difficulties | mechanics 8 |
+| Construction | Preview with valid/invalid tiles and reason, coverage ring, rotate (2 orientations), bulldoze, de-zone, upgrade, undo (30 steps) | mechanics 1, ui-test |
+| Rendering | Cached 16×16 terrain chunks with LOD, screen-sized ground cache while the camera rests, depth-sorted sprites (large buildings split into strips), day/night with lit windows and street lights, rain/fog/storm/cloud shadows, smoke, fire, animated turbines and fountains, vehicles, pedestrians, 17 data overlays, minimap | browser-test screenshots, sprite sheet of all 900 variants |
+| Interface | Animated main menu, new game form, pause menu, options, save/load slots, HUD, toolbar with thumbnails, 8 information panels, inspector for buildings and tiles, toasts, banners, tooltips, keyboard shortcuts, phone layout | ui-test (42 checks) |
+| Saving | IndexedDB slots with names and metadata, quick save, autosave, falls back to memory when storage is blocked; settings and career achievements in localStorage | ui-test (survives page reload), browser-test |
+
+## 0.8.0 – traffic, weather and graphics overhaul
+
+* **Traffic** (`js/traffic.js`, visible agents): right-hand lanes; each car follows a quadratic Bézier through its tile, so
+  turns are smooth; cars keep their distance (lane index rebuilt every frame), accelerate and brake, stop at a stop
+  line for red lights, and give way at junctions (one entry direction holds a junction; on signalled junctions the
+  green axis may enter from both sides). Deadlocks resolve by letting a car stuck for 7 s pass. Cars fade in and out
+  instead of popping. Buses stop at their stops. Visual time runs at most 2× however fast the simulation runs, and
+  the number of cars is about a third of before (95 / 60 / 30 by quality). Measured: no overlapping cars.
+* **Weather** (`Env.weatherTick`): runs on real time (showers last about 1–2 minutes, clear spells 2–4), follows
+  sensible sequences (clear → cloudy → rain → cloudy), and rain, fog and cloud intensity fade in and out over ~8 s.
+  The simulation still reads `weather.type` and `weather.wind`.
+* **Sound**: rain is a soft low-passed hiss at a quarter of the old level, following the rain intensity; thunder only
+  follows a visible lightning flash and is much quieter; the city hum is lower.
+* **Day/night** runs on real time too (a full day ≈ 5–7 minutes) instead of racing at 4×.
+* **Graphics**: all sprites are drawn at 2× resolution (1.5× medium, 1× low) and terrain at 2× when zoomed in, so the
+  city stays sharp; walls have contact shadows and a light-to-dark gradient; windows reflect the sky; buildings cast
+  shadows whose length follows the time of day; grass, sand and water colours vary smoothly instead of in a checkerboard;
+  animated surf along the shore; golden-hour grade, softer rain with splashes, a vignette.
+* Deploy: `wrangler.jsonc` + `.assetsignore` (tests and docs are not served).
+
+## Tutorial (added in 0.7.0)
+
+`js/tutorial.js` – 14 guided steps (camera, road, homes, power, water, time, jobs, demand bars, inspector,
+budget, data views). Each step watches the real game state and advances by itself; a pulsing ring marks the
+UI element and a glowing rectangle marks the suggested spot on the map, fitted into the free part of the
+screen (also on phones). Start it from the main menu (**Tutorial**, fixed seed 4242, easy, no disasters), the
+New Game form (checked until you finish it once) or the pause menu (**Start/Resume Tutorial**). Progress is
+stored in the save; random disasters are suspended while it runs. To add a step, append to `T.STEPS`
+(`target` selector, optional `map` rectangle, `done()` check or `info: true`).
+
+Tests: `python3 test/tutorial-test.py [outdir] [w h]` plays it like a new player (only clicking the highlighted
+element, dragging over the highlighted area) – passes at 1366×768 and 390×844 in ~30 s of real time.
+`python3 test/tutorial-edge-test.py` – close, back, resume from pause menu, save/load mid-tutorial (11 checks).
+
+## Usability play-test findings and fixes (0.7.0)
+
+| Found by playing | Fix |
+| --- | --- |
+| Opening Roads/Zones selected no tool, so a new player's first drag only moved the camera | Opening a category picks the usual tool (street, low density; remembers your last pick) |
+| "Something is in the way" did not say what | Says road / building / power line, and suggests placing beside the road |
+| Zone preview gave no sign that tiles were too far from a road | Those tiles turn orange and the cursor counts them |
+| Empty residential zones were almost invisible on grass | Brighter wash, solid outline and larger density markers for all zones |
+| Hovering a zoned tile showed "$0 · 0 tiles" | Shows "Already zoned" |
+| Tutorial reset the tool itself, so a habitual Esc opened the pause menu | Tool is left alone |
+| On phones the target area fell off-screen / under the card; the data-view menu covered the card | Camera fits targets into the free area; the data-view menu closes after a pick on narrow screens |
+
+## Known gaps (not implemented)
+
+* **Camera rotation** – the renderer has one view direction.
+* **Curved / diagonal roads** – roads are grid-aligned.
+* **Trams, metro** – not present. The train station, cargo terminal and airport are single buildings with
+  economic effects (demand, income, noise); there are no rail lines or flights to route.
+* **Web Workers** – the simulation runs on the main thread (about 0.2 ms per frame in tests).
+* **Terraforming**, pipe tool (water follows roads), four-way building rotation (two orientations exist).
+* **Individual citizens** – people are cohorts and per-building totals, as the brief allows.
+* **Vehicle following** – visible cars follow real routes and stop at red lights but do not queue behind
+  each other; congestion itself is computed in the aggregate model.
+* **Save export/import to a file.**
+* Budget controls are per department, not per building.
+
+## Not verified
+
+* **Audio** is fully synthesised and wired up, but the test environment has no speakers: it has not been
+  listened to. Expect to tune volumes and the music generator.
+* **Real-GPU frame rate.** Headless Chrome with software rendering: ~3–4 ms per frame at 1600×900 with a
+  resting camera, more while panning. Not measured on real hardware or with cities above ~10,000 residents.
+* **Late game.** Ranks 5–7 (15,000+ residents), nuclear power, airport, landmark and high-rise balance
+  have only been exercised in isolation, never reached by play.
+* **Scenarios** – start conditions are tested; winning and timing out are implemented but not played through.
+* **Touch** – pan, pinch and drag-to-build work under emulation; not tested on a real phone.
+* Firefox, Edge and Brave were not run; only Chrome. Nothing browser-specific is used beyond `-webkit-` fallbacks.
+
+## Balance notes (current values, all in `js/buildings.js`, `js/population.js`, `js/economy.js`)
+
+* 1 day = 0.5 s at 1× speed; 30-day months; a year is 3 minutes.
+* Start: $50,000 (easy 80k, hard 35k). Bot town reaches 500 residents in ~6 months, 2,000 in ~1.5 years.
+* A well-served town of 2,000 runs a surplus of roughly 25 %; bots that neglect services pile up cash,
+  which suggests upkeep could rise further once real play data exists.
+* Residential demand is driven mainly by happiness, so neglect slows growth rather than stopping it dead.
+
+## Where to continue (suggested order)
+
+1. Play a full game to Metropolis by hand and retune income/upkeep and level thresholds for ranks 4–7.
+2. Listen to the audio; adjust.
+3. Vehicle following and visible queues at lights.
+4. Rail: track tool, stations as nodes, trains as agents (reuse `Roads.path` with a second network layer).
+5. Camera rotation: needs `Art` to draw each design from 4 sides and the tile scan to iterate rotated.
+6. Save export/import; cloud-free sharing of seeds.
+7. Web Worker for `Env.pollution`, `Env.landValue` and trip assignment if large cities need it.
+
+## Conventions for future sessions
+
+* Classic scripts, one global `M`; no modules or build step so the game runs from `file://`.
+* Simulation modules never touch the DOM, so they load in Node for tests.
+* Everything that changes the map goes through `M.Build` (costs, undo, events) – including tests.
+* Events on the bus: `dirty` (tile redraw), `bld`, `built`, `placed`, `month`, `news`, `tier`, `achievement`.
+* When adding a building: add a `def(...)` in `buildings.js` and a `des(...)` in `sprites2.js`; the toolbar,
+  inspector, budget and unlock list pick it up automatically.
+* Keep `test/sim-test.js` and `test/mechanics-test.js` green; add an assertion with every new mechanic.

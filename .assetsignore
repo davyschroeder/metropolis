@@ -1,0 +1,7 @@
+test/
+README.md
+PROGRESS.md
+wrangler.jsonc
+.assetsignore
+.gitignore
+.git/

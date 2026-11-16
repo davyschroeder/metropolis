@@ -1,0 +1,10 @@
+{
+  // METROPOLIS – static site served by a Cloudflare Worker (Workers Builds deploys every push to main).
+  // Attach the custom domain metropolis.davyschroeder.nl to this Worker in the Cloudflare dashboard.
+  "name": "metropolis",
+  "compatibility_date": "2026-10-20",
+  "assets": {
+    "directory": "./",
+    "not_found_handling": "single-page-application"
+  }
+}
