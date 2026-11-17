@@ -7,8 +7,9 @@ An isometric city-building and management simulation written in plain HTML5, CSS
 
 Open `index.html` in Chrome, Firefox, Edge or Brave. That is all – it also works from `file://`.
 
-Live at **https://metropolis.davyschroeder.nl/**. Cloudflare Workers Builds deploys every push to `main`
-(`wrangler.jsonc`; `.assetsignore` keeps tests and docs off the site). Any other static host works too:
+Live at **https://davyschroeder.nl/metropolis/**. The website repo (davyschroeder/davyschroeder.nl) serves a copy:
+after pushing here, run `sh tools/sync-metropolis.sh` and the build in that repo, then commit it.
+`wrangler.jsonc` is kept in case the game ever gets a Worker and subdomain of its own. Any static host works:
 upload `index.html`, `css/` and `js/`.
 
 ## Controls
