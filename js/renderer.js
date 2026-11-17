@@ -14,7 +14,21 @@
   Rn.DCOL = DCOL;
   const pool = [], list = []; let nItems = 0;
   const parts = []; const icons = []; const lamps = []; let glow = null, cloudSp = null; const clouds = [];
-  let gcv = null, gctx = null, gKey = '', gValid = false, groundVer = 1; const shadowB = [], foam = []; let vign = null, vignKey = '';
+  let gcv = null, gctx = null, gKey = '', gValid = false, groundVer = 1;
+  // ---- light textures (additive) ----
+  const glows = {}, LIGHT = { lamp: '255,186,105', flood: '232,240,255', cyan: '120,220,255', red: '255,52,40', head: '255,246,220', tail: '255,40,28', pool: '255,176,92' };
+  function glowOf(k) {
+    let c = glows[k]; if (c) return c; c = glows[k] = S.mk(64, 64); const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32), col = LIGHT[k];
+    gr.addColorStop(0, 'rgba(' + col + ',0.95)'); gr.addColorStop(0.18, 'rgba(' + col + ',0.55)'); gr.addColorStop(0.5, 'rgba(' + col + ',0.16)'); gr.addColorStop(1, 'rgba(' + col + ',0)');
+    x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return c;
+  }
+  let beam = null;
+  function beamOf() { // headlight cone pointing along +x
+    if (beam) return beam; beam = S.mk(64, 32); const x = beam.getContext('2d'), gr = x.createLinearGradient(0, 0, 64, 0);
+    gr.addColorStop(0, 'rgba(255,246,220,0.75)'); gr.addColorStop(1, 'rgba(255,246,220,0)'); x.fillStyle = gr;
+    x.beginPath(); x.moveTo(0, 13); x.lineTo(64, 0); x.lineTo(64, 32); x.lineTo(0, 19); x.closePath(); x.filter = 'blur(2px)'; x.fill(); return beam;
+  }
+  const posts = []; const shadowB = [], foam = []; let vign = null, vignKey = '';
   // convex hull (monotone chain) of 8 points, used for building shadows
   function hull(P) { P.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; }); const cr = function (o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }, lo = [], up = []; for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); } for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); } lo.pop(); up.pop(); return lo.concat(up); }
 
@@ -41,13 +55,17 @@
 
   // ---------------- ground tiles ----------------
   function dia(c, sx, sy) { c.beginPath(); c.moveTo(sx, sy); c.lineTo(sx + TW, sy + TH); c.lineTo(sx, sy + 2 * TH); c.lineTo(sx - TW, sy + TH); c.closePath(); }
-  function drawTop(c, W, x, y, sx, sy) {
+  function tileColor(W, x, y) {
     const n = W.n, i = y * n + x, t = W.terr[i], h = M.hash(x, y, seed + 3); let col;
     if (t === 1) {
       const f = M.clamp((M.fbm(x * 0.06, y * 0.06, seed + 31, 3) - 0.28) * 2.3, 0, 1), dry = M.clamp((M.fbm(x * 0.045 + 7, y * 0.045, seed + 77, 2) - 0.58) * 3, 0, 0.5);
       col = M.mix(M.mix('#5c9a47', '#86bf5b', f), '#a9b660', dry); col = M.shade(col, 0.975 + h * 0.05);
     } else if (t === 2) col = M.mix('#dccb92', '#cfbd84', h); else col = M.mix('#8d987c', '#9aa386', M.fbm(x * 0.2, y * 0.2, seed + 3, 2));
     const ee = W.elev[i]; if (ee > 1) col = M.shade(col, 1 + (ee - 1) * 0.075);
+    return col;
+  }
+  function drawTop(c, W, x, y, sx, sy) {
+    const n = W.n, i = y * n + x, t = W.terr[i], h = M.hash(x, y, seed + 3), col = tileColor(W, x, y);
     dia(c, sx, sy); c.fillStyle = col; c.fill(); c.strokeStyle = col; c.lineWidth = 0.8; c.stroke();
     for (let k = 0; k < 4; k++) {
       const px = sx + (M.hash(x, y, k + 10) - 0.5) * 34, py = sy + TH + (M.hash(x, y, k + 20) - 0.5) * 13;
@@ -66,10 +84,56 @@
     }
     if (rt) S.drawRoad(c, sx, sy, rt, M.Roads.mask(W, x, y), { dir: W.rdir[i] });
   }
+  // Slopes instead of cliffs: a tile one level below a neighbour behind it draws a sloping bank from the
+  // neighbour's edge down onto itself (grass, rock, a sandy beach into water, or a ramp where two roads meet).
+  // Ends are tapered or joined to the next bank, and outer corners get a rounded wedge, so terraces flow.
+  function drawBanks(c, W, x, y, sx, sy, e) {
+    const n = W.n, i = y * n + x, E = function (xx, yy) { return xx < 0 || yy < 0 || xx >= n || yy >= n ? -9 : W.elev[yy * n + xx]; }, up = e + 1;
+    const N = E(x, y - 1) === up, Wt = E(x - 1, y) === up, NW = E(x - 1, y - 1) === up;
+    if (!N && !Wt && !NW) return;
+    const rd = W.road[i] !== 0, s = rd ? 0.2 : e === 0 ? 0.5 : 0.44;
+    const P = function (u, v, h) { return [sx + (u - v) * TW, sy + (u + v) * TH - h * EL]; };
+    const colOf = function (xx, yy, f) {
+      const j = yy * n + xx; let top = W.road[j] && rd ? '#5a5d63' : tileColor(W, xx, yy);
+      const bot = e === 0 ? '#bfa66e' : rd && W.road[j] ? '#4b4e54' : M.shade(top, 0.82);
+      if (e === 0 && W.terr[j] !== 2) top = M.mix(top, '#d9c78e', 0.35);
+      return [M.shade(top, f), M.shade(bot, f * 0.98)];
+    };
+    const fill = function (pts, cols, t0, t1) {
+      c.beginPath(); for (let k = 0; k < pts.length; k++) { const p = P(pts[k][0], pts[k][1], pts[k][2]); if (k) c.lineTo(p[0], p[1]); else c.moveTo(p[0], p[1]); } c.closePath();
+      const a = P(t0[0], t0[1], t0[2]), b = P(t1[0], t1[1], t1[2]), gr = c.createLinearGradient(a[0], a[1], b[0], b[1]);
+      gr.addColorStop(0, cols[0]); gr.addColorStop(1, cols[1]); c.fillStyle = gr; c.fill(); c.strokeStyle = cols[1]; c.lineWidth = 0.5; c.stroke();
+    };
+    // a road climbing onto the higher tile gets a proper ramp: pavement at the sides, asphalt and markings in the middle
+    const ramp = function (j, alongU) {
+      if (!rd || !W.road[j] || M.ROADS[W.road[i]].ped) return false;
+      const hw = M.ROADS[W.road[i]].w / 2, L = 0.5, pt = function (a, b, h) { return alongU ? [a, b, h] : [b, a, h]; };
+      fill([pt(0, 0, 1), pt(1, 0, 1), pt(1, L, 0), pt(0, L, 0)], ['#b8b6af', '#a9a7a0'], pt(0.5, 0, 1), pt(0.5, L, 0));
+      fill([pt(0.5 - hw, 0, 1), pt(0.5 + hw, 0, 1), pt(0.5 + hw, L, 0), pt(0.5 - hw, L, 0)], ['#55585e', '#4b4e54'], pt(0.5, 0, 1), pt(0.5, L, 0));
+      const a = P.apply(null, pt(0.5, 0, 1)), b = P.apply(null, pt(0.5, L, 0)); c.strokeStyle = '#e9d36a'; c.lineWidth = 0.9; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke(); c.setLineDash([]);
+      return true;
+    };
+    if (N && !ramp(i - n, true)) {
+      const lf = Wt || (E(x - 1, y) === e && NW), rf = E(x + 1, y) === e;
+      fill([[0, 0, 1], [1, 0, 1], rf ? [1, s, 0] : [1, 0, 0], lf ? [0, s, 0] : [0, 0, 0]], colOf(x, y - 1, 0.97), [0.5, 0, 1], [0.5, s, 0]);
+    }
+    if (Wt && !ramp(i - 1, false)) {
+      const tf = N || (E(x, y - 1) === e && NW), bf = E(x, y + 1) === e;
+      fill([[0, 0, 1], [0, 1, 1], bf ? [s, 1, 0] : [0, 1, 0], tf ? [s, 0, 0] : [0, 0, 0]], colOf(x - 1, y, 0.8), [0, 0.5, 1], [s, 0.5, 0]);
+    }
+    if (!N && !Wt && NW && !rd) fill([[0, 0, 1], [s, 0, 0], [s * 0.72, s * 0.72, 0], [0, s, 0]], colOf(x - 1, y - 1, 0.88), [0, 0, 1], [s * 0.5, s * 0.5, 0]);
+    if (e === 0) { // wet line where the beach meets the water
+      c.strokeStyle = 'rgba(255,255,255,0.28)'; c.lineWidth = 1; c.beginPath();
+      if (N) { const a = P(0, s, 0), b = P(1, s, 0); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); }
+      if (Wt) { const a = P(s, 0, 0), b = P(s, 1, 0); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); }
+      c.stroke();
+    }
+  }
   function sideCol(t, lit) { const b = t === 2 ? '#bfa772' : t === 3 ? '#7d7c70' : '#8a6d49'; return M.shade(b, lit ? 0.95 : 0.7); }
   function drawSides(c, W, x, y, sx, sy, e, t) {
     const n = W.n, i = y * n + x;
-    const dl = e - (y < n - 1 ? W.elev[i + n] : -1.4), dr = e - (x < n - 1 ? W.elev[i + 1] : -1.4);
+    let dl = e - (y < n - 1 ? W.elev[i + n] : -1.4), dr = e - (x < n - 1 ? W.elev[i + 1] : -1.4);
+    if (dl === 1) dl = 0; if (dr === 1) dr = 0; // one-level steps become slopes (see drawBanks)
     if (dl > 0) { c.beginPath(); c.moveTo(sx - TW, sy + TH); c.lineTo(sx, sy + 2 * TH); c.lineTo(sx, sy + 2 * TH + dl * EL); c.lineTo(sx - TW, sy + TH + dl * EL); c.closePath(); c.fillStyle = e === 0 ? '#1d4f7a' : sideCol(t, true); c.fill(); c.strokeStyle = c.fillStyle; c.lineWidth = 0.6; c.stroke(); }
     if (dr > 0) { c.beginPath(); c.moveTo(sx + TW, sy + TH); c.lineTo(sx, sy + 2 * TH); c.lineTo(sx, sy + 2 * TH + dr * EL); c.lineTo(sx + TW, sy + TH + dr * EL); c.closePath(); c.fillStyle = e === 0 ? '#173f63' : sideCol(t, false); c.fill(); c.strokeStyle = c.fillStyle; c.lineWidth = 0.6; c.stroke(); }
   }
@@ -80,8 +144,6 @@
     dia(c, sx, sy); c.fillStyle = col; c.fill(); c.strokeStyle = col; c.lineWidth = 0.8; c.stroke();
     if (d <= 1) { dia(c, sx, sy); c.fillStyle = 'rgba(120,220,210,0.18)'; c.fill(); }
     c.strokeStyle = 'rgba(255,255,255,0.3)'; c.lineWidth = 1.2; c.beginPath();
-    if (y > 0 && W.elev[i - n]) { c.moveTo(sx + 2, sy + 2); c.lineTo(sx + TW - 2, sy + TH); }
-    if (x > 0 && W.elev[i - 1]) { c.moveTo(sx - 2, sy + 2); c.lineTo(sx - TW + 2, sy + TH); }
     if (y < n - 1 && W.elev[i + n]) { c.moveTo(sx - TW + 3, sy + TH + 1); c.lineTo(sx, sy + 2 * TH - 1); }
     if (x < n - 1 && W.elev[i + 1]) { c.moveTo(sx + TW - 3, sy + TH + 1); c.lineTo(sx, sy + 2 * TH - 1); }
     c.stroke();
@@ -104,6 +166,7 @@
       const i = y * n + x, e = W.elev[i], sx = ox + (lx - ly) * TW, sy = oy + (lx + ly) * TH - e * EL;
       drawSides(c, W, x, y, sx, sy, e, W.terr[i]);
       if (e === 0) drawWater(c, W, x, y, sx, sy); else drawTop(c, W, x, y, sx, sy);
+      drawBanks(c, W, x, y, sx, sy, e);
     }
     ent.ver = chunkVer[cy * cw + cx];
   }
@@ -157,6 +220,16 @@
     drawSprite(sp, it.sx, it.sy - sp.oy, it.x0, it.w, 0, nf, lit);
     if (!first) return;
     const bx = it.sx, by = it.sy - sp.oy;
+    if (nf > 0.2 && sp.lights && sp.lights.length && (lit || b.t === 'park' || b.t === 'bigpark' || b.t === 'plaza')) {
+      const la = Math.min(1, (nf - 0.2) * 1.6); g.globalCompositeOperation = 'lighter';
+      for (const l of sp.lights) {
+        let s = l.k === 'flood' ? 70 : l.k === 'red' ? 12 : l.k === 'cyan' ? 30 : 26; s *= l.r; let a = la;
+        if (l.k === 'red') { a *= ((Rn.time + b.id * 0.37) % 1.6) < 0.8 ? 1 : 0.15; }
+        g.globalAlpha = a * (l.k === 'flood' ? 0.6 : 0.9); g.drawImage(glowOf(l.k), bx + l.x - s / 2, by + l.y - s / 2, s, s);
+        if (l.k === 'flood' || (l.k === 'lamp' && l.r >= 1)) { g.globalAlpha = a * 0.35; g.drawImage(glowOf(l.k === 'flood' ? 'flood' : 'pool'), bx + l.x - s * 1.4, by + l.y - s * 0.2, s * 2.8, s * 1.4); }
+      }
+      g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+    }
     if (sp.anim) {
       const an = sp.anim, x = bx + an.x, y = by + an.y;
       if (an.t === 'rotor') {
@@ -200,6 +273,13 @@
       const it = item(b.x + s - 1 + b.y + j + 1, 3); it.b = b; it.sp = sp; it.sx = dx; it.sy = wy; it.x0 = x0; it.w = x1 - x0; it.first = false; it.ax = wx; it.ay = wy;
     }
   }
+  function roadLamp(W, x, y, i, e, nf, z) {
+    const rt = W.road[i]; if (rt === 1 || rt === 7 || ((x + y) & 1)) return;
+    const m = M.Roads.mask(W, x, y), h = (m & 10) && !(m & 5), v = (m & 5) && !(m & 10); if (!h && !v) return;
+    const half = rt === 6 || rt === 4 ? 0.0 : 0.06, px = h ? x + 0.5 : x + half, py = h ? y + half : y + 0.5, ax = h ? 0 : 1, ay = h ? 1 : 0, on = W.power[i] === 1;
+    if (z > 0.55) { const it = item(px + py + 0.05, 7); it.px = px; it.py = py; it.ax = ax; it.ay = ay; it.e = e; it.on = on; }
+    if (on && nf > 0.2) { const p = Cam.tileToWorld(px + ax * 0.3, py + ay * 0.3, e); lamps.push(p[0], p[1]); }
+  }
   function diaPath(x, y, e) { const sx = (x - y) * TW, sy = (x + y) * TH - e * EL; g.moveTo(sx, sy); g.lineTo(sx + TW, sy + TH); g.lineTo(sx, sy + 2 * TH); g.lineTo(sx - TW, sy + TH); g.closePath(); }
   function rectPath(x0, y0, x1, y1, e) { const a = Cam.tileToWorld(x0, y0, e), b = Cam.tileToWorld(x1, y0, e), c = Cam.tileToWorld(x1, y1, e), d = Cam.tileToWorld(x0, y1, e); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.lineTo(c[0], c[1]); g.lineTo(d[0], d[1]); g.closePath(); }
 
@@ -208,7 +288,7 @@
     const W = M.world, city = M.city; if (!W || !cv) return;
     Rn.frame++; Rn.time += dt; const tA = performance.now();
     const n = W.n, z = Cam.zoom, cw2 = Cam.w, ch2 = Cam.h, T = M.Traffic;
-    const nf = M.settings.daynight ? nightFactor(city.tod) : 0, dark = nf * 0.56; Rn.night = nf;
+    const nf = M.settings.daynight ? nightFactor(city.tod) : 0, dark = nf * 0.6, nightMul = 'rgb(' + Math.round(255 - nf * 197) + ',' + Math.round(255 - nf * 177) + ',' + Math.round(255 - nf * 95) + ')'; Rn.night = nf;
     let shx = 0, shy = 0; if (Cam.shake > 0) { shx = (M.rand() - 0.5) * 10 * Cam.shake; shy = (M.rand() - 0.5) * 8 * Cam.shake; }
     const vx0 = Cam.x - cw2 / 2 / z, vx1 = Cam.x + cw2 / 2 / z, vy0 = Cam.y - ch2 / 2 / z, vy1 = Cam.y + ch2 / 2 / z;
     const world = function (c) { c.setTransform(dpr * z, 0, 0, dpr * z, dpr * (cw2 / 2 - Cam.x * z + shx), dpr * (ch2 / 2 - Cam.y * z + shy)); };
@@ -242,7 +322,7 @@
       if (stable) { gValid = complete; g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(gcv, 0, 0); } else gValid = false;
     }
     world(g); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'low';
-    if (dark > 0.01) { g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = 'rgba(10,16,46,' + dark.toFixed(3) + ')'; g.fillRect(0, 0, cv.width, cv.height); world(g); }
+    if (dark > 0.01) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'multiply'; g.fillStyle = nightMul; g.fillRect(0, 0, cv.width, cv.height); g.globalCompositeOperation = 'source-over'; world(g); }
 
     const tB = performance.now();
     // ---- visible tile scan ----
@@ -257,7 +337,7 @@
       if (e === 0) {
         if (z > 0.45 && !W.road[i] && W.wdepth[i] <= 1) foam.push(x, y);
         if (glint && !W.road[i]) { const ph = Math.sin(time * 1.3 + x * 0.9 + y * 1.7 + M.hash(x, y, 4) * 6); if (ph > 0.55) { const sx = (x - y) * TW + (M.hash(x, y, 5) - 0.5) * 24, sy = (x + y) * TH + TH + (M.hash(x, y, 6) - 0.5) * 10, l = (ph - 0.55) * 14; g.moveTo(sx - l, sy); g.lineTo(sx + l, sy); glints++; } }
-        else if (W.road[i] && nf > 0.3 && ((x + y) & 1) === 0 && W.power[i] === 1) lamps.push((x - y) * TW, (x + y) * TH + TH - EL - 6);
+        else if (W.road[i]) roadLamp(W, x, y, i, 1, nf, z);
         if (ov) { const bk = overlayBucket(W, city, ov, i); if (bk >= 0) buckets[bk].push(i); }
         continue;
       }
@@ -270,7 +350,7 @@
       if (id) { const bd = W.blds[id - 1]; if (bd && bd.fr !== fr) { bd.fr = fr; addBuilding(W, bd, e); } }
       const rt = W.road[i];
       if (rt) {
-        if (nf > 0.3 && ((x + y) & 1) === 0 && rt !== 1 && rt !== 7 && W.power[i] === 1) lamps.push((x - y) * TW, (x + y) * TH + TH - e * EL - 6);
+        roadLamp(W, x, y, i, e, nf, z);
         if (z > 0.6 && M.ROADS[rt].lights && M.Roads.driveCount(W, i) >= 3) { const it = item(x + y + 1.3, 5); it.x = (x - y) * TW; it.y = (x + y) * TH - e * EL; it.i = i; }
       }
     }
@@ -279,9 +359,10 @@
     if (foam.length) {
       g.beginPath();
       for (let q = 0; q < foam.length; q += 2) {
-        const x = foam[q], y = foam[q + 1], i = y * n + x, sx = (x - y) * TW, sy = (x + y) * TH, ph = 0.1 + 0.08 * Math.sin(time * 1.6 + x * 0.7 + y * 0.9);
-        if (y > 0 && W.elev[i - n]) { g.moveTo(sx + TW * ph * 2, sy + TH * ph * 2); g.lineTo(sx + TW - TW * ph, sy + TH + TH * ph); }
-        if (x > 0 && W.elev[i - 1]) { g.moveTo(sx - TW * ph * 2, sy + TH * ph * 2); g.lineTo(sx - TW + TW * ph, sy + TH + TH * ph); }
+        const x = foam[q], y = foam[q + 1], i = y * n + x, sx = (x - y) * TW, sy = (x + y) * TH, ph = 0.1 + 0.08 * Math.sin(time * 1.6 + x * 0.7 + y * 0.9), pb = 0.46 + ph * 0.6;
+        const tp = function (u, v) { return [sx + (u - v) * TW, sy + (u + v) * TH]; };
+        if (y > 0 && W.elev[i - n]) { const a = tp(0.06, pb), b = tp(0.94, pb); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
+        if (x > 0 && W.elev[i - 1]) { const a = tp(pb, 0.06), b = tp(pb, 0.94); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
         if (y < n - 1 && W.elev[i + n]) { g.moveTo(sx - TW + TW * ph, sy + TH - TH * ph); g.lineTo(sx - TW * ph * 2, sy + 2 * TH - TH * ph * 2); }
         if (x < n - 1 && W.elev[i + 1]) { g.moveTo(sx + TW - TW * ph, sy + TH - TH * ph); g.lineTo(sx + TW * ph * 2, sy + 2 * TH - TH * ph * 2); }
       }
@@ -306,14 +387,14 @@
       g.globalAlpha = 1;
     }
     // ---- street lights ----
-    if (lamps.length) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = Math.min(1, nf * 1.3); for (let q = 0; q < lamps.length; q += 2) g.drawImage(glow, lamps[q] - 22, lamps[q + 1] - 16, 44, 30); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
+    if (lamps.length) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = Math.min(1, (nf - 0.2) * 1.5) * 0.8; const pl = glowOf('pool'), pw = TW * 2.4, ph = TH * 2.4; for (let q = 0; q < lamps.length; q += 2) g.drawImage(pl, lamps[q] - pw / 2, lamps[q + 1] - ph / 2, pw, ph); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
     // ---- agents ----
     Rn.view.cx = (Cam.x / TW + Cam.y / TH) / 2; Rn.view.cy = (Cam.y / TH - Cam.x / TW) / 2; Rn.view.r = Math.min(46, Math.max(10, cw2 / z / TW / 2 + 4)); Rn.view.night = nf;
     if (z > 0.38) {
       const cars = T.cars;
       for (let q = 0; q < cars.length; q++) {
         const c = cars[q], wx = (c.x - c.y) * TW, wy = (c.x + c.y) * TH - c.e * EL; if (wx < vx0 - 40 || wx > vx1 + 40 || wy < vy0 - 40 || wy > vy1 + 40) continue;
-        const sp = S.vehicle(c.type, c.ax, c.type === 'car' ? c.col : c.col % 3), it = item(c.x + c.y + 0.02, 6); it.w = sp.w; it.h = sp.h; it.a = c.a;
+        const sp = S.vehicle(c.type, c.d, c.type === 'car' ? c.col : c.col % 3), it = item(c.x + c.y + 0.02, 6); it.w = sp.w; it.h = sp.h; it.a = c.a;
         it.c = nf > 0.6 ? S.night(sp, false) : sp.c; it.x = wx - sp.ox; it.y = wy - sp.oy - TH; it.wx = wx; it.wy = wy; it.d = c.d; it.car = c;
       }
       if (z > 0.6) { const peds = T.peds; for (let q = 0; q < peds.length; q++) { const p = peds[q], wx = (p.x - p.y) * TW, wy = (p.x + p.y) * TH - p.e * EL; if (wx < vx0 || wx > vx1 || wy < vy0 || wy > vy1) continue; const it = item(p.x + p.y + 0.01, 4); it.x = wx; it.y = wy; it.col = p.col; it.ph = p.ph; } }
@@ -324,19 +405,30 @@
     list.sort(function (p, q) { return p.k - q.k; });
     Rn.stats.items = nItems;
     if (ov) g.globalAlpha = 0.38;
-    const PED = ['#d94f4f', '#4f7fd9', '#e8d06a', '#5fae5f', '#e8e6e0', '#9a6ad0'], nightTile = dark > 0.01 ? 'rgba(10,16,46,' + dark.toFixed(3) + ')' : null;
+    const PED = ['#d94f4f', '#4f7fd9', '#e8d06a', '#5fae5f', '#e8e6e0', '#9a6ad0'], nightTile = dark > 0.01 ? nightMul : null;
     for (let q = 0; q < nItems; q++) {
       const it = list[q];
       switch (it.t) {
         case 0: if (!it.n) g.drawImage(it.c, it.x, it.y, it.w, it.h); else if (nf > 0.98) g.drawImage(it.n, it.x, it.y, it.w, it.h); else { const ga = g.globalAlpha; g.drawImage(it.c, it.x, it.y, it.w, it.h); g.globalAlpha = ga * nf; g.drawImage(it.n, it.x, it.y, it.w, it.h); g.globalAlpha = ga; } break;
-        case 2: { const sx = (it.x - it.y) * TW, sy = (it.x + it.y) * TH - it.e * EL; const ga = g.globalAlpha; g.globalAlpha = 1; drawTop(g, W, it.x, it.y, sx, sy); if (nightTile) { dia(g, sx, sy); g.fillStyle = nightTile; g.fill(); } g.globalAlpha = ga; break; }
+        case 2: { const sx = (it.x - it.y) * TW, sy = (it.x + it.y) * TH - it.e * EL; const ga = g.globalAlpha; g.globalAlpha = 1; drawTop(g, W, it.x, it.y, sx, sy); if (nightTile) { dia(g, sx, sy); g.globalCompositeOperation = 'multiply'; g.fillStyle = nightTile; g.fill(); g.globalCompositeOperation = 'source-over'; } g.globalAlpha = ga; break; }
         case 3: drawBuildingPart(it, nf, adt); break;
         case 4: { const bob = Math.sin(time * 9 + it.ph) > 0 ? 1 : 0; g.fillStyle = nf > 0.5 ? '#3a4458' : PED[it.col]; g.fillRect(it.x - 1, it.y - 5 - bob, 2, 4); g.fillStyle = nf > 0.5 ? '#59627a' : '#f0c8a0'; g.fillRect(it.x - 1, it.y - 7 - bob, 2, 2); break; }
         case 5: { const ns = M.Roads.greenNS(it.i, T.time); g.fillStyle = '#3a3d42'; g.fillRect(it.x - 0.5, it.y + 2, 1.2, 9); g.fillRect(it.x + TW - 9.5, it.y + TH - 7, 1.2, 9); g.fillStyle = ns ? '#3ddc5a' : '#ff4a3a'; g.fillRect(it.x - 1.5, it.y, 3, 3); g.fillStyle = ns ? '#ff4a3a' : '#3ddc5a'; g.fillRect(it.x + TW - 10.5, it.y + TH - 9, 3, 3); break; }
+        case 7: { // street lamp post
+          const P0 = Cam.tileToWorld(it.px, it.py, it.e), P1 = Cam.tileToWorld(it.px + it.ax * 0.22, it.py + it.ay * 0.22, it.e), H = 17;
+          g.strokeStyle = nf > 0.5 ? '#2a3140' : '#4a5058'; g.lineWidth = 1.3; g.beginPath(); g.moveTo(P0[0], P0[1]); g.lineTo(P0[0], P0[1] - H); g.lineTo(P1[0], P1[1] - H); g.stroke();
+          const lit = it.on && nf > 0.2; g.fillStyle = lit ? '#fff1c8' : '#9aa1a8'; g.fillRect(P1[0] - 1.6, P1[1] - H - 0.5, 3.2, 1.8);
+          if (lit) { const ga = g.globalAlpha; g.globalCompositeOperation = 'lighter'; g.globalAlpha = ga * Math.min(1, (nf - 0.2) * 1.6); g.drawImage(glowOf('lamp'), P1[0] - 11, P1[1] - H - 11, 22, 22); g.globalAlpha = ga; g.globalCompositeOperation = 'source-over'; }
+          break;
+        }
         case 6: {
           const ga = g.globalAlpha; if (it.a < 1) g.globalAlpha = ga * Math.max(0, it.a); g.drawImage(it.c, it.x, it.y, it.w, it.h); g.globalAlpha = ga;
           if (it.a < 0.6) break;
-          if (nf > 0.4) { const d = it.d, hx = d === 1 ? 9 : d === 3 ? -9 : d === 2 ? -9 : 9, hy = d === 1 ? 4.5 : d === 3 ? -4.5 : d === 2 ? 4.5 : -4.5; g.globalCompositeOperation = 'lighter'; g.drawImage(glow, it.wx + hx - 8, it.wy + hy - 9, 16, 12); g.globalCompositeOperation = 'source-over'; }
+          if (nf > 0.3) { // headlight beams in front, red tail lights behind
+            const d = it.d, dx = d === 1 || d === 0 ? 0.894 : -0.894, dy = d === 1 || d === 2 ? 0.447 : -0.447, la = Math.min(1, (nf - 0.3) * 1.8) * Math.min(1, it.a), fx = it.wx + dx * 6, fy = it.wy + dy * 6 - 3;
+            g.globalCompositeOperation = 'lighter'; g.save(); g.translate(fx, fy); g.rotate(Math.atan2(dy, dx)); g.globalAlpha = la * 0.7; g.drawImage(beamOf(), 0, -8, 30, 16); g.restore();
+            g.globalAlpha = la; g.drawImage(glowOf('head'), fx - 4, fy - 4, 8, 8); g.drawImage(glowOf('tail'), it.wx - dx * 7 - 3, it.wy - dy * 7 - 6, 6, 6); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+          }
           const c = it.car; if ((c.type === 'fire' || c.type === 'police') && (time * 4 % 1) < 0.5) { g.fillStyle = c.type === 'fire' ? '#ff3a2a' : '#3a7bff'; g.fillRect(it.wx - 1.5, it.wy - 11, 3, 2.5); }
           break;
         }
@@ -383,7 +475,12 @@
     // ---- screen-space weather ----
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     // golden hour, then a cool blue night grade
-    const tint = nf * (1 - nf) * 4; if (tint > 0.02) { g.fillStyle = 'rgba(255,146,64,' + (tint * 0.13).toFixed(3) + ')'; g.fillRect(0, 0, cw2, ch2); }
+    if (M.settings.daynight) {
+      const tod = city.tod, warm = Math.max(0, 1 - Math.abs(tod - 0.715) / 0.075, 0.8 * (1 - Math.abs(tod - 0.27) / 0.06)), blue = Math.max(0, 1 - Math.abs(tod - 0.8) / 0.06, 0.6 * (1 - Math.abs(tod - 0.21) / 0.05));
+      if (warm > 0.01) { g.globalCompositeOperation = 'soft-light'; g.fillStyle = 'rgba(255,136,52,' + (warm * 0.55).toFixed(3) + ')'; g.fillRect(0, 0, cw2, ch2); g.globalCompositeOperation = 'source-over'; g.fillStyle = 'rgba(255,150,80,' + (warm * 0.06).toFixed(3) + ')'; g.fillRect(0, 0, cw2, ch2); }
+      if (nf > 0.3) { g.globalCompositeOperation = 'soft-light'; g.fillStyle = 'rgba(20,34,120,' + ((nf - 0.3) * 0.5).toFixed(3) + ')'; g.fillRect(0, 0, cw2, ch2); g.globalCompositeOperation = 'source-over'; }
+      if (blue > 0.01) { g.globalCompositeOperation = 'soft-light'; g.fillStyle = 'rgba(96,88,220,' + (blue * 0.5).toFixed(3) + ')'; g.fillRect(0, 0, cw2, ch2); g.globalCompositeOperation = 'source-over'; }
+    }
     if (fx) {
       if (cloudI > 0.05) { g.fillStyle = 'rgba(70,82,100,' + (cloudI * 0.1 + rainI * 0.12).toFixed(3) + ')'; g.fillRect(0, 0, cw2, ch2); }
       if (rainI > 0.02) {

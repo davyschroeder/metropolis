@@ -1,6 +1,6 @@
 # METROPOLIS – development progress
 
-Version 0.8.0 · last updated 17 Nov 2026 · ~4,300 dense lines of JavaScript/CSS in 26 modules, no dependencies.
+Version 0.9.0 · last updated 17 Nov 2026 · ~4,300 dense lines of JavaScript/CSS in 26 modules, no dependencies.
 
 This file is the hand-over document. Read it first when continuing in a new session.
 
@@ -52,6 +52,21 @@ Last run of all four: all passing, 0 JavaScript errors.
 | Rendering | Cached 16×16 terrain chunks with LOD, screen-sized ground cache while the camera rests, depth-sorted sprites (large buildings split into strips), day/night with lit windows and street lights, rain/fog/storm/cloud shadows, smoke, fire, animated turbines and fountains, vehicles, pedestrians, 17 data overlays, minimap | browser-test screenshots, sprite sheet of all 900 variants |
 | Interface | Animated main menu, new game form, pause menu, options, save/load slots, HUD, toolbar with thumbnails, 8 information panels, inspector for buildings and tiles, toasts, banners, tooltips, keyboard shortcuts, phone layout | ui-test (42 checks) |
 | Saving | IndexedDB slots with names and metadata, quick save, autosave, falls back to memory when storage is blocked; settings and career achievements in localStorage | ui-test (survives page reload), browser-test |
+
+## 0.9.0 – evening lighting, slopes, vehicle fixes
+
+* **Lighting**: street lamp posts along straight roads (lit only where there is power) with warm light pools; window
+  glow baked into each building's night sprite (no runtime cost: night renders as fast as day); per-building light
+  sources (`Art.light`, `Art.post`): porch and shop lights, car-park lamps, park lamps, fountain lights, stadium and
+  sports-field floodlights, blinking red aviation lights on anything taller than ~125 px; headlight beams and red tail
+  lights; golden hour (soft-light warm), violet blue hour, and a saturated multiply-based night grade (ground and
+  sprites use the same night colour) with extra contrast.
+* **Terrain**: one-level steps are no longer vertical walls. The lower tile draws a sloping bank (grass, rock, or a
+  sandy beach into the water with a wet line and surf at its foot); banks join along a terrace and round off outer
+  corners; where a road climbs a step it becomes a ramp with pavement, asphalt and markings. Map edges keep walls.
+* **Vehicles**: sprites for all four driving directions (cab, bonnet and windscreen at the front), so nothing drives
+  backwards; at most ~1 in 8 visible vehicles is a truck.
+* **UI fix**: panels no longer re-render during a click (a refresh between press and release used to swallow the click).
 
 ## 0.8.0 – traffic, weather and graphics overhaul
 

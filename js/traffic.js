@@ -243,7 +243,9 @@
     while (T.spawnAcc >= 1 && civ < target && T.pool.length) {
       T.spawnAcc -= 1; let best = null, bd = 1e9;
       for (let k = 0; k < 4; k++) { const e = T.pool[(M.rand() * T.pool.length) | 0], mid = e.p[e.p.length >> 1]; const d = view ? Math.abs(mid % n - view.cx) + Math.abs(((mid / n) | 0) - view.cy) : 0; if (d < bd) { bd = d; best = e; } }
-      if (trySpawn(W, best.p, best.type, civ < target * 0.6 && M.rand() < 0.5)) civ++;
+      let trucks = 0; for (let k = 0; k < cars.length; k++) if (cars[k].type === 'truck' && !cars[k].out) trucks++;
+      const ty = best.type === 'truck' && trucks < Math.max(1, target * 0.12) ? 'truck' : 'car';
+      if (trySpawn(W, best.p, ty, civ < target * 0.6 && M.rand() < 0.5)) civ++;
     }
     if (T.spawnAcc > 2) T.spawnAcc = 2;
     let w = 0;

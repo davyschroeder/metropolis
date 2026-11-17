@@ -49,6 +49,8 @@
       '<div id="bottom"><div id="tray" class="glass hidden"></div><div id="cats" class="glass">' +
       M.CATS.map(function (c) { return '<button class="cat" data-act="cat:' + c.id + '" id="cat-' + c.id + '" data-tip="' + c.name + (c.key ? ' <kbd>' + c.key + '</kbd>' : '') + '">' + icon(c.id) + '<span>' + (c.short || c.name) + '</span></button>'; }).join('') + '</div></div>' +
       '<div id="cursorinfo" class="hidden"></div><div id="banner" class="hidden"></div>';
+    document.addEventListener('pointerdown', function (e) { if (e.target.closest && e.target.closest('#panel, #modal')) { U.pressing = true; U.lastPress = performance.now(); } }, true);
+    document.addEventListener('pointerup', function () { if (U.pressing) { U.lastPress = performance.now(); setTimeout(function () { U.pressing = false; }, 0); } }, true);
     document.addEventListener('click', onClick); document.addEventListener('pointerdown', function (e) { if (e.pointerType !== 'mouse' && !(e.target.closest && e.target.closest('[data-tip]'))) $('#tooltip').classList.remove('show'); });
     document.addEventListener('input', onInput); document.addEventListener('change', onChange);
     document.addEventListener('mouseover', onOver); document.addEventListener('mouseout', function (e) { if (e.target.closest && e.target.closest('[data-tip]')) $('#tooltip').classList.remove('show'); });
@@ -228,6 +230,7 @@
   U.closePanel = function () { U.panel = null; M.Render.sel = null; const p = $('#panel'); if (p) p.classList.add('hidden'); document.querySelectorAll('#side .ib').forEach(function (b) { if (b.dataset.act.indexOf('panel:') === 0) b.classList.remove('on'); }); };
   U.refreshPanel = function (force) {
     if (!U.panel) return; const body = $('#p-body'), ae = document.activeElement;
+    if (!force && (U.pressing || performance.now() - (U.lastPress || 0) < 600)) return; // never swap the DOM mid-click
     if (!force && ae && body.contains(ae) && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT')) return;
     const r = M.Panels.render(U.panel, U.panelArg); if (!r) { U.closePanel(); return; }
     $('#p-title').textContent = r.title;

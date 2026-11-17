@@ -16,11 +16,18 @@
   function Art(size, h) {
     const R = this.r = S.RES; this.s = size; this.h = h; this.W = size * 2 * TW + 4; this.H = size * 2 * TH + h + 4;
     this.c = mk(this.W * R, this.H * R); this.g = this.c.getContext('2d'); this.g.setTransform(R, 0, 0, R, 0, 0);
-    this.ox = size * TW + 2; this.oy = h + 2; this.flip = 0; this.wins = []; this.smoke = []; this.anim = null; this.top = 0; this.g.lineJoin = 'round';
+    this.ox = size * TW + 2; this.oy = h + 2; this.flip = 0; this.wins = []; this.smoke = []; this.lights = []; this.anim = null; this.top = 0; this.topX = 0; this.topY = 0; this.g.lineJoin = 'round';
   }
   S.Art = Art;
   const A = Art.prototype;
-  A.p = function (u, v, z) { if (z > this.top) this.top = z; if (this.flip) { const t = u; u = v; v = t; } return [this.ox + (u - v) * TW, this.oy + (u + v) * TH - (z || 0)]; };
+  A.p = function (u, v, z) {
+    if (this.flip) { const t = u; u = v; v = t; } const P = [this.ox + (u - v) * TW, this.oy + (u + v) * TH - (z || 0)];
+    if (z > this.top) { this.top = z; this.topX = P[0]; this.topY = P[1]; } return P;
+  };
+  // a light source drawn at night: 'lamp' warm, 'flood' bright white, 'cyan', 'red' blinking aviation light
+  A.light = function (u, v, z, k, r) { const P = this.p(u, v, z); this.lights.push({ x: P[0], y: P[1], k: k || 'lamp', r: r || 1 }); };
+  // a small park/street lamp post with its light
+  A.post = function (u, v, h) { h = h || 13; this.seg([u, v, 0], [u, v, h], '#3d4249', 1.2); this.box(u - 0.025, v - 0.025, u + 0.025, v + 0.025, h, h + 2.2, '#f1e7c8'); this.light(u, v, h + 1, 'lamp', 0.8); };
   A.poly = function (pts, fill, line) {
     const g = this.g; g.beginPath();
     for (let i = 0; i < pts.length; i++) { const P = this.p(pts[i][0], pts[i][1], pts[i][2]); if (i) g.lineTo(P[0], P[1]); else g.moveTo(P[0], P[1]); }
@@ -122,7 +129,10 @@
     else { this.box(u - w, v - l, u + w, v + l, 0, 3, col); this.box(u - w * 0.85, v - l * 0.5, u + w * 0.85, v + l * 0.45, 3, 5.5, '#2c3a4a'); }
   };
   A.flag = function (u, v, z, h, col) { this.seg([u, v, z], [u, v, z + h], '#d8d8d8', 1); const P = this.p(u, v, z + h), g = this.g; g.fillStyle = col; g.beginPath(); g.moveTo(P[0], P[1]); g.lineTo(P[0] + 8, P[1] + 2.5); g.lineTo(P[0], P[1] + 5); g.closePath(); g.fill(); };
-  A.done = function () { return { c: this.c, ox: this.ox, oy: this.oy, w: this.W, h: this.H, r: this.r, top: this.top, wins: this.wins, smoke: this.smoke, anim: this.anim, size: this.s }; };
+  A.done = function () {
+    if (this.top > 125) this.lights.push({ x: this.topX, y: this.topY - 2, k: 'red', r: 0.7 }); // aviation light on tall towers and chimneys
+    return { c: this.c, ox: this.ox, oy: this.oy, w: this.W, h: this.H, r: this.r, top: this.top, wins: this.wins, smoke: this.smoke, lights: this.lights, anim: this.anim, size: this.s };
+  };
 
   // ---------- palettes ----------
   const WALL = ['#e9decb', '#dccaa9', '#cdb99b', '#e6e2d8', '#d3dae0', '#e8d1c1', '#d9b9a0', '#c3ccb9', '#f0e6c8', '#c9d4d9'];
@@ -138,7 +148,7 @@
     for (let k = 0; k < n; k++) { const u = u0 + r() * (u1 - u0 - 0.2), v = v0 + r() * (v1 - v0 - 0.2); if (r() < 0.5) a.box(u, v, u + 0.14, v + 0.12, H, H + 3 + r() * 3, '#c4c8cc'); else a.box(u, v, u + 0.2, v + 0.18, H, H + 6, '#9aa0a6'); }
   }
   function parking(a, u0, v0, u1, v1, r, axisU) {
-    a.gq(u0, v0, u1, v1, '#55585e');
+    a.gq(u0, v0, u1, v1, '#55585e'); a.light((u0 + u1) / 2, (v0 + v1) / 2, 14, 'lamp', 1.2);
     const n = Math.floor(((axisU ? u1 - u0 : v1 - v0)) / 0.16);
     for (let k = 0; k <= n; k++) { const t = (axisU ? u0 : v0) + k * 0.16; if (axisU) a.seg([t, v0, 0], [t, v0 + (v1 - v0) * 0.45, 0], 'rgba(255,255,255,0.6)', 0.7); else a.seg([u0, t, 0], [u0 + (u1 - u0) * 0.45, t, 0], 'rgba(255,255,255,0.6)', 0.7); }
     for (let k = 0; k < n; k++) if (r() < 0.6) { const t = (axisU ? u0 : v0) + k * 0.16 + 0.08; if (axisU) a.car(t, v0 + (v1 - v0) * 0.25, pk(r, CARCOL), false); else a.car(u0 + (u1 - u0) * 0.25, t, pk(r, CARCOL), true); }
@@ -158,7 +168,7 @@
     a.box(u0, v0, u1, v1, 0, h, wall);
     if (big) { a.win('A', u0, u1, v1, 2, 9, 3, 1); a.win('B', v0, v1, u1, 2, 9, 2, 1); a.win('A', u0, u1, v1, 10, h - 1, 3, 1); a.win('B', v0, v1, u1, 10, h - 1, 2, 1); }
     else { a.win('A', u0, u1, v1, 3, h - 2, 2, 1, { mx: 0.24 }); a.win('B', v0, v1, u1, 3, h - 2, 2, 1, { mx: 0.24 }); }
-    a.face('A', um - 0.045, um + 0.045, v1, 0, 7.5, '#6b4a34');
+    a.face('A', um - 0.045, um + 0.045, v1, 0, 7.5, '#6b4a34'); a.light(um + 0.08, v1 + 0.02, 8, 'lamp', 0.45);
     a.gable(u0 - 0.04, v0 - 0.04, u1 + 0.04, v1 + 0.04, h, big ? 12 : 9, roof, wall, r() < 0.5 ? 'u' : 'v');
     a.box(u0 + 0.08, v0 + 0.1, u0 + 0.15, v0 + 0.17, h + 3, h + 13, '#8a5a4a');
     if (big) { a.gq(0.62, 0.78, 0.92, 0.95, '#e8e4d8'); a.gq(0.65, 0.8, 0.89, 0.93, '#5fc3e8'); }
@@ -249,7 +259,7 @@
     a.face('A', 0.46, 0.54, 0.78, 0, 8.5, '#3d3028');
     a.box(0.14, 0.18, 0.86, 0.78, 14, 15.5, sh(wall, 0.85), '#93979c');
     a.box(0.2, 0.7, 0.8, 0.74, 15.5, 22, awn); a.face('A', 0.24, 0.76, 0.74, 17, 20.5, '#fff6dc');
-    awning(a, 0.14, 0.86, 0.78, 12, awn);
+    awning(a, 0.14, 0.86, 0.78, 12, awn); a.light(0.5, 0.86, 9, 'lamp', 0.9);
     roofKit(a, r, 0.2, 0.22, 0.8, 0.6, 15.5, 1);
     if (r() < 0.5) a.box(0.08, 0.84, 0.16, 0.92, 0, 5, '#3c9a5a');
   }
@@ -261,7 +271,7 @@
     a.win('A', 0.14, 0.86, 0.74, 12, H - 1, 3, fl); a.win('B', 0.16, 0.72, 0.88, 12, H - 1, 3, fl); a.win('B', 0.2, 0.7, 0.88, 3, 10, 2, 1);
     a.face('A', 0.14, 0.86, 0.74, 10.4, 11.6, sh(wall, 0.7));
     a.box(0.12, 0.14, 0.88, 0.74, H, H + 1.6, sh(wall, 0.85), '#93979c'); roofKit(a, r, 0.2, 0.2, 0.8, 0.6, H + 1.6, 2);
-    awning(a, 0.12, 0.88, 0.74, 11.5, awn);
+    awning(a, 0.12, 0.88, 0.74, 11.5, awn); a.light(0.3, 0.82, 9, 'lamp', 0.8); a.light(0.7, 0.82, 9, 'lamp', 0.8);
     for (let k = 0; k < 2; k++) { const u = 0.3 + k * 0.4; a.seg([u, 0.9, 0], [u, 0.9, 7], '#8a8a8a', 1); a.pyr(u - 0.1, 0.8, u + 0.1, 1.0, 6, 3, k ? awn : '#f2efe6'); a.dot(u - 0.08, 0.93, 1, 1.3, '#6b4a34'); a.dot(u + 0.08, 0.93, 1, 1.3, '#6b4a34'); }
   }
   function C3(a, r, w, v) {
@@ -365,17 +375,32 @@
   // ---------- night / abandoned variants ----------
   function nightOf(sp, lit) {
     const c = mk(sp.c.width, sp.c.height), g = c.getContext('2d'); g.drawImage(sp.c, 0, 0);
-    g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(10,16,46,0.6)'; g.fillRect(0, 0, c.width, c.height); g.globalCompositeOperation = 'source-over';
+    g.globalCompositeOperation = 'multiply'; g.fillStyle = 'rgb(58,78,160)'; g.fillRect(0, 0, c.width, c.height); g.globalCompositeOperation = 'destination-in'; g.drawImage(sp.c, 0, 0); g.globalCompositeOperation = 'source-over';
     g.setTransform(sp.r, 0, 0, sp.r, 0, 0);
     if (lit && sp.wins) {
       for (let i = 0; i < sp.wins.length; i++) {
         const h = M.hash(i, sp.wins.length, 77); if (h > 0.55) continue; const p = sp.wins[i];
-        g.fillStyle = h < 0.08 ? '#bfe0ff' : h < 0.3 ? '#ffe7a8' : '#ffd27a';
+        g.fillStyle = h < 0.08 ? '#bfe0ff' : h < 0.3 ? '#ffe39a' : h < 0.45 ? '#ffc65a' : '#ffa94a';
         g.beginPath(); g.moveTo(p[0][0], p[0][1]); g.lineTo(p[1][0], p[1][1]); g.lineTo(p[2][0], p[2][1]); g.lineTo(p[3][0], p[3][1]); g.closePath(); g.fill();
       }
     }
+    if (lit && sp.wins && sp.wins.length && M.settings.quality !== 'low') { // bake a soft glow around lit windows into the night sprite
+      const bl = S.bloom(sp); if (bl) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.55; g.drawImage(bl, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; sp.bl = undefined; }
+    }
     return c;
   }
+  // soft halo around lit windows, drawn additively over the night sprite (bloom)
+  S.bloom = function (sp) {
+    if (sp.bl !== undefined) return sp.bl; if (!sp.wins || !sp.wins.length) return (sp.bl = null);
+    const c = mk(sp.c.width, sp.c.height), g = c.getContext('2d'); g.setTransform(sp.r, 0, 0, sp.r, 0, 0);
+    g.shadowBlur = 7 * sp.r; g.shadowColor = 'rgba(255,170,70,0.95)';
+    for (let i = 0; i < sp.wins.length; i++) {
+      const h = M.hash(i, sp.wins.length, 77); if (h > 0.55) continue; const p = sp.wins[i];
+      g.fillStyle = h < 0.08 ? 'rgba(170,205,255,0.55)' : 'rgba(255,200,120,0.5)';
+      g.beginPath(); g.moveTo(p[0][0], p[0][1]); g.lineTo(p[1][0], p[1][1]); g.lineTo(p[2][0], p[2][1]); g.lineTo(p[3][0], p[3][1]); g.closePath(); g.fill();
+    }
+    return (sp.bl = c);
+  };
   S.night = function (sp, lit) { if (lit) return sp.n || (sp.n = nightOf(sp, true)); return sp.nd || (sp.nd = nightOf(sp, false)); };
   function abandon(sp) {
     const g = sp.c.getContext('2d');
@@ -433,14 +458,16 @@
     });
   };
   // vehicles: type, axis (1 = along u/x, 0 = along v/y), colour index
-  S.vehicle = function (type, axisU, col) {
-    return S.misc('veh' + type + (axisU ? 1 : 0) + col, 1, 18, function (a) {
-      const bx = function (l, w, z0, z1, c, o) { o = o || 0; if (axisU) a.box(0.5 - l + o, 0.5 - w, 0.5 + l + o, 0.5 + w, z0, z1, c); else a.box(0.5 - w, 0.5 - l + o, 0.5 + w, 0.5 + l + o, z0, z1, c); };
-      if (type === 'car') { bx(0.13, 0.06, 0.5, 3.6, CARCOL[col]); bx(0.07, 0.052, 3.6, 6, '#26323f'); }
+  // d: driving direction 0 N, 1 E, 2 S, 3 W — the front (cab, bonnet, windscreen) always points that way
+  S.vehicle = function (type, d, col) {
+    const axisU = d === 1 || d === 3, sg = d === 1 || d === 2 ? 1 : -1;
+    return S.misc('veh' + type + d + col, 1, 18, function (a) {
+      const bx = function (l, w, z0, z1, c, o) { o = (o || 0) * sg; if (axisU) a.box(0.5 - l + o, 0.5 - w, 0.5 + l + o, 0.5 + w, z0, z1, c); else a.box(0.5 - w, 0.5 - l + o, 0.5 + w, 0.5 + l + o, z0, z1, c); };
+      if (type === 'car') { bx(0.13, 0.06, 0.5, 3.6, CARCOL[col]); bx(0.065, 0.052, 3.6, 6, '#26323f', -0.02); bx(0.012, 0.05, 3.6, 5.6, '#7fa8c8', 0.05); }
       else if (type === 'truck') { bx(0.16, 0.07, 0.5, 8, ['#e8e6e0', '#c9cdd1', '#d9c28a'][col % 3]); bx(0.045, 0.065, 0.5, 6.5, CARCOL[col], 0.21); }
-      else if (type === 'bus') { bx(0.2, 0.07, 0.5, 7.5, '#e8a92a'); bx(0.19, 0.072, 3.5, 6, '#26323f'); }
+      else if (type === 'bus') { bx(0.2, 0.07, 0.5, 7.5, '#e8a92a'); bx(0.19, 0.072, 3.5, 6, '#26323f'); bx(0.012, 0.073, 1.5, 6.4, '#9fc4e0', 0.195); }
       else if (type === 'fire') { bx(0.19, 0.07, 0.5, 7, '#c8322a'); bx(0.12, 0.03, 7, 8.4, '#e6e6e6', -0.03); bx(0.04, 0.066, 3.5, 6.2, '#26323f', 0.13); }
-      else if (type === 'police') { bx(0.13, 0.06, 0.5, 3.6, '#f1f1f1'); bx(0.07, 0.052, 3.6, 6, '#22355a'); bx(0.02, 0.04, 6, 7.2, '#3a7bff'); }
+      else if (type === 'police') { bx(0.13, 0.06, 0.5, 3.6, '#f1f1f1'); bx(0.065, 0.052, 3.6, 6, '#22355a', -0.02); bx(0.012, 0.05, 3.6, 5.6, '#7fa8c8', 0.05); bx(0.02, 0.04, 6, 7.2, '#3a7bff'); }
       else if (type === 'garbage') { bx(0.17, 0.07, 0.5, 8, '#3f8f5a'); bx(0.045, 0.066, 0.5, 6.5, '#e8e6e0', 0.2); }
     });
   };
