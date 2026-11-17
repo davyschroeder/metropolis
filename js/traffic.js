@@ -139,7 +139,7 @@
   }
   function addOcc(tile, dir) { let o = occ.get(tile); if (!o) occ.set(tile, o = [0, 0, 0, 0]); o[dir]++; }
   function remOcc(tile, dir) { const o = occ.get(tile); if (o && o[dir] > 0) o[dir]--; }
-  function laneRemove(c) { const l = laneMap.get(c.g.key); if (l) { const j = l.indexOf(c); if (j >= 0) l.splice(j, 1); } }
+  function laneRemove(c) { if (!c.g) return; const l = laneMap.get(c.g.key); if (l) { const j = l.indexOf(c); if (j >= 0) l.splice(j, 1); } }
   // distance (in tiles along the road) to the nearest obstacle ahead: another car, a red light or a busy junction
   function clearance(W, c) {
     const g = c.g, here = (1 - c.t) * g.len; let gap = 9;
@@ -197,7 +197,7 @@
   }
   function buildRoutes(W, city) {
     const R = M.Roads, tot = M.Services.totals; T.routes = [];
-    T.cars = T.cars.filter(function (c) { if (c.type === 'bus') { T.free.push(c); return false; } return true; });
+    { const cs = T.cars; let w = 0; for (let i = 0; i < cs.length; i++) { const c = cs[i]; if (c.type === 'bus') { laneRemove(c); T.free.push(c); } else cs[w++] = c; } cs.length = w; } // in place: T.update holds this array
     if (!tot || !tot.depots.length) return;
     R.components(W); const stops = []; W.each(function (b) { if (b.t === 'busstop' && b.busOK) stops.push(b); });
     for (const dep of tot.depots) {

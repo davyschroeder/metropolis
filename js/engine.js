@@ -56,7 +56,7 @@
     if (M.world) {
       const adt = active ? dt * E.speed : (M.mode === 'menu' ? dt : 0), vdt = active ? dt * Math.min(E.speed, 2) : (M.mode === 'menu' ? dt : 0);
       M.Traffic.update(vdt, M.world, c, M.Render.view);
-      M.Camera.update(dt); M.Render.draw(dt, adt);
+      M.Camera.update(dt); M.Render.draw(dt, adt); M.Render.adapt(dt, E.fps);
     }
     M.UI.frame(dt);
   };

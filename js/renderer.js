@@ -14,7 +14,7 @@
   Rn.DCOL = DCOL;
   const pool = [], list = []; let nItems = 0;
   const parts = []; const icons = []; const lamps = []; let glow = null, cloudSp = null; const clouds = [];
-  let gcv = null, gctx = null, gKey = '', gValid = false, groundVer = 1;
+  let gcv = null, gctx = null, gcv2 = null, gctx2 = null, gsx = 0, gsy = 0, gKey = '', gValid = false, groundVer = 1;
   // ---- light textures (additive) ----
   const glows = {}, LIGHT = { lamp: '255,186,105', flood: '232,240,255', cyan: '120,220,255', red: '255,52,40', head: '255,246,220', tail: '255,40,28', pool: '255,176,92' };
   function glowOf(k) {
@@ -41,8 +41,18 @@
     cloudSp = S.mk(256, 128); const cg = cloudSp.getContext('2d');
     for (let k = 0; k < 7; k++) { const x = 60 + M.hash(k, 1, 5) * 136, y = 40 + M.hash(k, 2, 5) * 48, r = 34 + M.hash(k, 3, 5) * 26, gr2 = cg.createRadialGradient(x, y, 2, x, y, r); gr2.addColorStop(0, 'rgba(10,20,40,0.5)'); gr2.addColorStop(1, 'rgba(10,20,40,0)'); cg.fillStyle = gr2; cg.fillRect(0, 0, 256, 128); }
   };
+  // dynamic resolution: when frames take too long, render fewer pixels (and scale the canvas up with CSS);
+  // climb back when there is headroom. Measured on draw time, which is independent of the display refresh rate.
+  Rn.scale = 1; Rn.ms = 8; let slowT = 0, fastT = 0;
+  Rn.adapt = function (dt, fps) {
+    if (!cv || M.mode !== 'game' || !M.settings || M.settings.autoRes === false) { slowT = fastT = 0; return; }
+    if (fps < 42 && Rn.ms > 16) { slowT += dt; fastT = 0; } else if (Rn.ms < 9 && fps > 50) { fastT += dt; slowT = 0; } else { slowT = Math.max(0, slowT - dt); fastT = Math.max(0, fastT - dt); }
+    if (slowT > 1.5 && Rn.scale > 0.6) { Rn.scale = Math.max(0.6, Rn.scale - 0.1); slowT = 0; Rn.resize(); }
+    else if (fastT > 5 && Rn.scale < 1 && Rn.ms * Math.pow((Rn.scale + 0.1) / Rn.scale, 2) < 12) { Rn.scale = Math.min(1, Rn.scale + 0.1); fastT = 0; Rn.resize(); }
+  };
   Rn.resize = function () {
-    if (!cv) return; dpr = Math.min(window.devicePixelRatio || 1, M.settings && M.settings.quality === 'low' ? 1 : 2);
+    if (!cv) return; const q = M.settings && M.settings.quality, base = Math.min(window.devicePixelRatio || 1, q === 'low' ? 1 : q === 'medium' ? 1.5 : 2);
+    dpr = Math.max(Math.min(1, base), Math.round(base * Rn.scale * 20) / 20);
     const w = cv.clientWidth || window.innerWidth, h = cv.clientHeight || window.innerHeight;
     cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); Cam.w = w; Cam.h = h;
   };
@@ -204,7 +214,8 @@
     const ga = g.globalAlpha;
     if (nf < 0.02) g.drawImage(sp.c, sx, sy, sw, sh, dx + x0, dy + yc, sw / r, sh / r);
     else if (nf > 0.98) g.drawImage(S.night(sp, lit), sx, sy, sw, sh, dx + x0, dy + yc, sw / r, sh / r);
-    else { g.drawImage(sp.c, sx, sy, sw, sh, dx + x0, dy + yc, sw / r, sh / r); g.globalAlpha = ga * nf; g.drawImage(S.night(sp, lit), sx, sy, sw, sh, dx + x0, dy + yc, sw / r, sh / r); g.globalAlpha = ga; }
+    else { const bc = S.blend(sp, lit, Math.round(nf * 16)); if (bc) g.drawImage(bc, sx, sy, sw, sh, dx + x0, dy + yc, sw / r, sh / r);
+      else { g.drawImage(sp.c, sx, sy, sw, sh, dx + x0, dy + yc, sw / r, sh / r); g.globalAlpha = ga * nf; g.drawImage(S.night(sp, lit), sx, sy, sw, sh, dx + x0, dy + yc, sw / r, sh / r); g.globalAlpha = ga; } }
   }
   function drawBuildingPart(it, nf, adt) {
     const b = it.b, sp = it.sp, lit = b.pw !== false && (b.z ? !b.ab : b.on !== false), first = it.first;
@@ -286,20 +297,21 @@
   // ---------------- frame ----------------
   Rn.draw = function (dt, adt) {
     const W = M.world, city = M.city; if (!W || !cv) return;
-    Rn.frame++; Rn.time += dt; const tA = performance.now();
+    Rn.frame++; Rn.time += dt; const tA = performance.now(); S.blendBudget = 14;
     const n = W.n, z = Cam.zoom, cw2 = Cam.w, ch2 = Cam.h, T = M.Traffic;
-    const nf = M.settings.daynight ? nightFactor(city.tod) : 0, dark = nf * 0.6, nightMul = 'rgb(' + Math.round(255 - nf * 197) + ',' + Math.round(255 - nf * 177) + ',' + Math.round(255 - nf * 95) + ')'; Rn.night = nf;
+    const nf = M.settings.daynight ? nightFactor(city.tod) : 0, dark = nf * 0.6, nightMul = 'rgb(' + Math.round(255 - nf * 197) + ',' + Math.round(255 - nf * 177) + ',' + Math.round(255 - nf * 95) + ')'; Rn.night = nf; if ((nf < 0.02 || nf > 0.98) && Rn.frame % 60 === 0) S.dropBlends();
     let shx = 0, shy = 0; if (Cam.shake > 0) { shx = (M.rand() - 0.5) * 10 * Cam.shake; shy = (M.rand() - 0.5) * 8 * Cam.shake; }
-    const vx0 = Cam.x - cw2 / 2 / z, vx1 = Cam.x + cw2 / 2 / z, vy0 = Cam.y - ch2 / 2 / z, vy1 = Cam.y + ch2 / 2 / z;
-    const world = function (c) { c.setTransform(dpr * z, 0, 0, dpr * z, dpr * (cw2 / 2 - Cam.x * z + shx), dpr * (ch2 / 2 - Cam.y * z + shy)); };
-    // ---- ground: terrain chunks, cached as one screen-sized layer while the camera rests ----
-    const L = W.limit, gk = Cam.x.toFixed(2) + ',' + Cam.y.toFixed(2) + ',' + z.toFixed(4) + ',' + cv.width + ',' + cv.height + ',' + groundVer + ',' + (nf > 0.5 ? 1 : 0) + ',' + L.x0 + L.y0 + L.x1 + L.y1 + M.mode + (Cam.shake > 0 ? Rn.frame : '');
-    if (gk === gKey && gValid) { g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(gcv, 0, 0); }
-    else {
-      const stable = gk === gKey && M.settings.quality !== 'low'; gKey = gk;
-      if (stable && (!gcv || gcv.width !== cv.width || gcv.height !== cv.height)) { gcv = S.mk(cv.width, cv.height); gctx = gcv.getContext('2d', { alpha: false }); }
-      const c = stable ? gctx : g;
-      c.setTransform(1, 0, 0, 1, 0, 0);
+    // snap the camera to whole device pixels so the cached ground can be scrolled without blurring
+    const zd = z * dpr, camX = Math.round(Cam.x * zd) / zd, camY = Math.round(Cam.y * zd) / zd;
+    const vx0 = camX - cw2 / 2 / z, vx1 = camX + cw2 / 2 / z, vy0 = camY - ch2 / 2 / z, vy1 = camY + ch2 / 2 / z;
+    const world = function (c) { c.setTransform(zd, 0, 0, zd, dpr * (cw2 / 2 + shx) - camX * zd, dpr * (ch2 / 2 + shy) - camY * zd); };
+    // ---- ground: terrain chunks + night tint, kept in a screen-sized layer. When the camera pans, the layer is
+    // shifted and only the newly exposed strips are painted, instead of recompositing every chunk each frame.
+    const L = W.limit, nStep = Math.round(nf * 24), gk = z.toFixed(4) + ',' + cv.width + ',' + cv.height + ',' + groundVer + ',' + nStep + ',' + L.x0 + ',' + L.y0 + ',' + L.x1 + ',' + L.y1 + ',' + M.mode;
+    if (!gcv || gcv.width !== cv.width || gcv.height !== cv.height) { gcv = S.mk(cv.width, cv.height); gctx = gcv.getContext('2d', { alpha: false }); gcv2 = S.mk(cv.width, cv.height); gctx2 = gcv2.getContext('2d', { alpha: false }); gValid = false; }
+    const paintGround = function (c, rects) {
+      c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+      if (rects) { c.beginPath(); for (const r of rects) c.rect(r[0], r[1], r[2], r[3]); c.clip(); }
       const sky = c.createLinearGradient(0, 0, 0, cv.height); sky.addColorStop(0, nf > 0.5 ? '#0b1220' : '#1c2c3c'); sky.addColorStop(1, nf > 0.5 ? '#111a2a' : '#2a3d4e'); c.fillStyle = sky; c.fillRect(0, 0, cv.width, cv.height);
       world(c); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'low';
       const lod = z < 0.55 ? 0 : (z * dpr >= 1.45 && M.settings.quality === 'high' ? 2 : 1), cwid = 2 * CH * TW, chei = 2 * CH * TH + 62; let built = 0, drawn = 0, complete = true;
@@ -319,10 +331,22 @@
         c.fillStyle = 'rgba(8,14,24,0.34)'; c.beginPath(); rp(0, 0, n, L.y0); rp(0, L.y1 + 1, n, n); rp(0, L.y0, L.x0, L.y1 + 1); rp(L.x1 + 1, L.y0, n, L.y1 + 1); c.fill();
         c.beginPath(); rp(L.x0, L.y0, L.x1 + 1, L.y1 + 1); c.strokeStyle = 'rgba(255,255,255,0.55)'; c.lineWidth = 1.5 / z; c.setLineDash([8 / z, 6 / z]); c.stroke(); c.setLineDash([]);
       }
-      if (stable) { gValid = complete; g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(gcv, 0, 0); } else gValid = false;
-    }
+      if (nStep > 0) { const q = nStep / 24; c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'multiply'; c.fillStyle = 'rgb(' + Math.round(255 - q * 197) + ',' + Math.round(255 - q * 177) + ',' + Math.round(255 - q * 95) + ')'; c.fillRect(0, 0, cv.width, cv.height); c.globalCompositeOperation = 'source-over'; }
+      c.restore(); return complete;
+    };
+    const shaking = Cam.shake > 0, same = gValid && gk === gKey && !shaking;
+    const dxp = same ? Math.round((gsx - camX) * zd) : 0, dyp = same ? Math.round((gsy - camY) * zd) : 0;
+    if (same && !dxp && !dyp) { /* unchanged */ }
+    else if (same && Math.abs(dxp) < cv.width * 0.7 && Math.abs(dyp) < cv.height * 0.7) {
+      gctx2.setTransform(1, 0, 0, 1, 0, 0); gctx2.drawImage(gcv, dxp, dyp);
+      let t = gcv; gcv = gcv2; gcv2 = t; t = gctx; gctx = gctx2; gctx2 = t;
+      const R = [], Wd = cv.width, Hd = cv.height;
+      if (dxp > 0) R.push([0, 0, dxp, Hd]); else if (dxp < 0) R.push([Wd + dxp, 0, -dxp, Hd]);
+      if (dyp > 0) R.push([0, 0, Wd, dyp]); else if (dyp < 0) R.push([0, Hd + dyp, Wd, -dyp]);
+      gValid = paintGround(gctx, R); gsx = camX; gsy = camY;
+    } else { gValid = paintGround(gctx, null) && !shaking; gKey = gk; gsx = camX; gsy = camY; }
+    g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(gcv, 0, 0);
     world(g); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'low';
-    if (dark > 0.01) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'multiply'; g.fillStyle = nightMul; g.fillRect(0, 0, cv.width, cv.height); g.globalCompositeOperation = 'source-over'; world(g); }
 
     const tB = performance.now();
     // ---- visible tile scan ----
@@ -502,7 +526,7 @@
       const vk = cw2 + 'x' + ch2; if (vk !== vignKey) { vignKey = vk; vign = S.mk(cw2 / 4, ch2 / 4); const vg = vign.getContext('2d'), gr = vg.createRadialGradient(cw2 / 8, ch2 / 8, Math.min(cw2, ch2) / 10, cw2 / 8, ch2 / 8, Math.hypot(cw2, ch2) / 8); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(6,12,24,0.42)'); vg.fillStyle = gr; vg.fillRect(0, 0, cw2, ch2); }
       g.drawImage(vign, 0, 0, cw2, ch2);
     }
-    const tE = performance.now(), st = Rn.stats; st.tGround += (tB - tA - st.tGround) * 0.1; st.tScan += (tC - tB - st.tScan) * 0.1; st.tObj += (tD - tC - st.tObj) * 0.1; st.tPost += (tE - tD - st.tPost) * 0.1;
+    const tE = performance.now(), st = Rn.stats; Rn.ms += (tE - tA - Rn.ms) * 0.1; st.tGround += (tB - tA - st.tGround) * 0.1; st.tScan += (tC - tB - st.tScan) * 0.1; st.tObj += (tD - tC - st.tObj) * 0.1; st.tPost += (tE - tD - st.tPost) * 0.1;
   };
 
   function drawToolLayer(W, z) {

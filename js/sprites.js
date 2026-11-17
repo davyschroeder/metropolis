@@ -401,6 +401,18 @@
     }
     return (sp.bl = c);
   };
+  // dusk/dawn: one pre-blended day→night sprite per quantized step instead of drawing both versions every frame.
+  // Only the current step is kept; a small per-frame budget spreads the work so a step change never hitches.
+  S.blendStep = -1; S.blendBudget = 0;
+  S.blend = function (sp, lit, step) {
+    const k = lit ? 'bL' : 'bD', ks = k + 's';
+    if (sp[ks] === step) return sp[k];
+    if (S.blendBudget <= 0) return null; S.blendBudget--;
+    const nc = S.night(sp, lit), c = (sp[ks] !== undefined && sp[k]) || mk(sp.c.width, sp.c.height), g = c.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.clearRect(0, 0, c.width, c.height); g.drawImage(sp.c, 0, 0);
+    g.globalAlpha = step / 16; g.drawImage(nc, 0, 0); g.globalAlpha = 1; sp[k] = c; sp[ks] = step; S.blendStep = step; return c;
+  };
+  S.dropBlends = function () { if (S.blendStep < 0) return; S.blendStep = -1; S.cache.forEach(function (sp) { sp.bL = sp.bD = sp.bLs = sp.bDs = undefined; }); };
   S.night = function (sp, lit) { if (lit) return sp.n || (sp.n = nightOf(sp, true)); return sp.nd || (sp.nd = nightOf(sp, false)); };
   function abandon(sp) {
     const g = sp.c.getContext('2d');

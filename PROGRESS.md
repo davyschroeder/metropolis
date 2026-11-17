@@ -167,3 +167,10 @@ element, dragging over the highlighted area) – passes at 1366×768 and 390×84
 * When adding a building: add a `def(...)` in `buildings.js` and a `des(...)` in `sprites2.js`; the toolbar,
   inspector, budget and unlock list pick it up automatically.
 * Keep `test/sim-test.js` and `test/mechanics-test.js` green; add an assertion with every new mechanic.
+
+## 0.9.1 — performance
+- **Scrolling ground cache**: the terrain layer (chunks + sky + night tint) lives in a screen-sized canvas. On pan it is shifted and only the newly exposed strips are painted (`paintGround(c, rects)` in `Rn.draw`); camera is snapped to device pixels so the shift is exact. Verified pixel-identical to a full repaint. Panning cost at 1600×900@2x: ~100–185 ms → ~5 ms for the ground stage.
+- Night tint is baked into that layer (quantized to 24 steps) instead of a full-screen multiply every frame.
+- **Dusk/dawn**: `S.blend(sp, lit, step)` keeps one pre-blended day→night sprite per 1/16 step (14 built per frame, dropped again by `S.dropBlends` at full day/night) instead of drawing every building twice.
+- **Dynamic resolution**: `Rn.adapt(dt, fps)` lowers `Rn.scale` (1 → 0.6, steps of 0.1) when draw time > 16 ms and fps < 42 for 1.5 s, and raises it again when there is headroom. `settings.autoRes === false` turns it off. Medium quality caps the pixel ratio at 1.5.
+- Fixed: `buildRoutes` replaced `T.cars` while `T.update` was still iterating the old array, so a removed car could sit in both `T.cars` and `T.free` and get recycled as another vehicle (fire engines and buses vanished). Now filtered in place.
