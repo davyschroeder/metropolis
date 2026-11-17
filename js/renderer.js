@@ -97,11 +97,13 @@
   // Slopes instead of cliffs: a tile one level below a neighbour behind it draws a sloping bank from the
   // neighbour's edge down onto itself (grass, rock, a sandy beach into water, or a ramp where two roads meet).
   // Ends are tapered or joined to the next bank, and outer corners get a rounded wedge, so terraces flow.
-  function drawBanks(c, W, x, y, sx, sy, e) {
-    const n = W.n, i = y * n + x, E = function (xx, yy) { return xx < 0 || yy < 0 || xx >= n || yy >= n ? -9 : W.elev[yy * n + xx]; }, up = e + 1;
+  // mode 1: water tile under a bridge (plain beach, the deck is drawn on top afterwards);
+  // mode 2: the bridge deck itself (level 1): only a ramp up to a road on higher land behind it.
+  function drawBanks(c, W, x, y, sx, sy, e, mode) {
+    const n = W.n, i = y * n + x, E = function (xx, yy) { return xx < 0 || yy < 0 || xx >= n || yy >= n ? -9 : W.elev[yy * n + xx]; }, up = (mode === 2 ? 1 : e) + 1;
     const N = E(x, y - 1) === up, Wt = E(x - 1, y) === up, NW = E(x - 1, y - 1) === up;
     if (!N && !Wt && !NW) return;
-    const rd = W.road[i] !== 0, s = rd ? 0.2 : e === 0 ? 0.5 : 0.44;
+    const rd = mode !== 1 && W.road[i] !== 0, s = rd ? 0.2 : e === 0 ? 0.5 : 0.44;
     const P = function (u, v, h) { return [sx + (u - v) * TW, sy + (u + v) * TH - h * EL]; };
     const colOf = function (xx, yy, f) {
       const j = yy * n + xx; let top = W.road[j] && rd ? '#5a5d63' : tileColor(W, xx, yy);
@@ -123,6 +125,7 @@
       const a = P.apply(null, pt(0.5, 0, 1)), b = P.apply(null, pt(0.5, L, 0)); c.strokeStyle = '#e9d36a'; c.lineWidth = 0.9; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke(); c.setLineDash([]);
       return true;
     };
+    if (mode === 2) { if (N) ramp(i - n, true); if (Wt) ramp(i - 1, false); return; }
     if (N && !ramp(i - n, true)) {
       const lf = Wt || (E(x - 1, y) === e && NW), rf = E(x + 1, y) === e;
       fill([[0, 0, 1], [1, 0, 1], rf ? [1, s, 0] : [1, 0, 0], lf ? [0, s, 0] : [0, 0, 0]], colOf(x, y - 1, 0.97), [0.5, 0, 1], [0.5, s, 0]);
@@ -149,22 +152,23 @@
   }
   // smoothed water depth (5×5 average, land counts as 0) so deep water fades gradually instead of in blocks
   function avgDepth(W, x, y) { const n = W.n; let s = 0, k = 0; for (let oy = -2; oy <= 2; oy++) for (let ox = -2; ox <= 2; ox++) { const xx = x + ox, yy = y + oy; if (xx < 0 || yy < 0 || xx >= n || yy >= n) { s += 4; k++; continue; } const j = yy * n + xx; s += W.elev[j] ? 0 : Math.min(5, W.wdepth[j]); k++; } return s / k; }
+  function drawDeck(c, W, x, y, sx, sy) {
+    const i = y * W.n + x, rt = W.road[i], by = sy - EL;
+    c.fillStyle = '#7d8186'; c.fillRect(sx - TW + 4, by + TH, 3, EL + 2); c.fillRect(sx + TW - 7, by + TH, 3, EL + 2); c.fillRect(sx - 1.5, by + 2 * TH - 1, 3, EL + 2);
+    c.beginPath(); c.moveTo(sx - TW, by + TH); c.lineTo(sx, by + 2 * TH); c.lineTo(sx, by + 2 * TH + 4); c.lineTo(sx - TW, by + TH + 4); c.closePath(); c.fillStyle = '#a4a7ab'; c.fill();
+    c.beginPath(); c.moveTo(sx + TW, by + TH); c.lineTo(sx, by + 2 * TH); c.lineTo(sx, by + 2 * TH + 4); c.lineTo(sx + TW, by + TH + 4); c.closePath(); c.fillStyle = '#84878b'; c.fill();
+    S.drawRoad(c, sx, by, rt, M.Roads.mask(W, x, y), { dir: W.rdir[i], bridge: true });
+    drawBanks(c, W, x, y, sx, by, 0, 2);
+  }
   function drawWater(c, W, x, y, sx, sy) {
     const n = W.n, i = y * n + x, d = W.wdepth[i], ad = avgDepth(W, x, y), dv = M.clamp((ad - 0.6) / 3.2 + (M.fbm(x * 0.15, y * 0.15, seed + 8, 2) - 0.5) * 0.35, 0, 1), col = M.mix('#55b7e2', '#1c5b91', dv);
     dia(c, sx, sy); c.fillStyle = col; c.fill(); c.strokeStyle = col; c.lineWidth = 0.8; c.stroke();
     if (d <= 1) { dia(c, sx, sy); c.fillStyle = 'rgba(120,220,210,0.18)'; c.fill(); }
     c.strokeStyle = 'rgba(255,255,255,0.3)'; c.lineWidth = 1.2; c.beginPath();
-    if (y < n - 1 && W.elev[i + n]) { c.moveTo(sx - TW + 3, sy + TH + 1); c.lineTo(sx, sy + 2 * TH - 1); }
-    if (x < n - 1 && W.elev[i + 1]) { c.moveTo(sx + TW - 3, sy + TH + 1); c.lineTo(sx, sy + 2 * TH - 1); }
+    const kq = 0.34, wp = function (u, v, mv) { const px = sx + (u - v) * TW, py = sy + (u + v) * TH; if (mv) c.moveTo(px, py); else c.lineTo(px, py); }; // wet line just behind land that stands in front of this tile
+    if (y < n - 1 && W.elev[i + n] === 1) { wp(0.08, 1 - kq, true); wp(0.92 - kq, 1 - kq); }
+    if (x < n - 1 && W.elev[i + 1] === 1) { wp(1 - kq, 0.08, true); wp(1 - kq, 0.92 - kq); }
     c.stroke();
-    const rt = W.road[i];
-    if (rt) { // bridge deck
-      const by = sy - EL;
-      c.fillStyle = '#7d8186'; c.fillRect(sx - TW + 4, by + TH, 3, EL + 2); c.fillRect(sx + TW - 7, by + TH, 3, EL + 2); c.fillRect(sx - 1.5, by + 2 * TH - 1, 3, EL + 2);
-      c.beginPath(); c.moveTo(sx - TW, by + TH); c.lineTo(sx, by + 2 * TH); c.lineTo(sx, by + 2 * TH + 4); c.lineTo(sx - TW, by + TH + 4); c.closePath(); c.fillStyle = '#a4a7ab'; c.fill();
-      c.beginPath(); c.moveTo(sx + TW, by + TH); c.lineTo(sx, by + 2 * TH); c.lineTo(sx, by + 2 * TH + 4); c.lineTo(sx + TW, by + TH + 4); c.closePath(); c.fillStyle = '#84878b'; c.fill();
-      S.drawRoad(c, sx, by, rt, M.Roads.mask(W, x, y), { dir: W.rdir[i], bridge: true });
-    }
   }
   function renderChunk(ent, cx, cy, lod) {
     const W = M.world, s = [0.5, 1, 2][lod], w = 2 * CH * TW, h = 2 * CH * TH + 62;
@@ -175,8 +179,9 @@
       const x = cx * CH + lx, y = cy * CH + ly; if (x >= n || y >= n) continue;
       const i = y * n + x, e = W.elev[i], sx = ox + (lx - ly) * TW, sy = oy + (lx + ly) * TH - e * EL;
       drawSides(c, W, x, y, sx, sy, e, W.terr[i]);
-      if (e === 0) drawWater(c, W, x, y, sx, sy); else drawTop(c, W, x, y, sx, sy);
-      drawBanks(c, W, x, y, sx, sy, e);
+      if (e === 0) { // water, then the beach, then (if there is one) the bridge deck over both
+        drawWater(c, W, x, y, sx, sy); const br = W.road[i] !== 0; drawBanks(c, W, x, y, sx, sy, e, br ? 1 : 0); if (br) drawDeck(c, W, x, y, sx, sy);
+      } else { drawTop(c, W, x, y, sx, sy); drawBanks(c, W, x, y, sx, sy, e); }
     }
     ent.ver = chunkVer[cy * cw + cx];
   }
@@ -401,8 +406,11 @@
         const tp = function (u, v) { return [sx + (u - v) * TW, sy + (u + v) * TH]; };
         if (y > 0 && W.elev[i - n]) { const a = tp(0.06, pb), b = tp(0.94, pb); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
         if (x > 0 && W.elev[i - 1]) { const a = tp(pb, 0.06), b = tp(pb, 0.94); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
-        if (y < n - 1 && W.elev[i + n]) { g.moveTo(sx - TW + TW * ph, sy + TH - TH * ph); g.lineTo(sx - TW * ph * 2, sy + 2 * TH - TH * ph * 2); }
-        if (x < n - 1 && W.elev[i + 1]) { g.moveTo(sx + TW - TW * ph, sy + TH - TH * ph); g.lineTo(sx + TW * ph * 2, sy + 2 * TH - TH * ph * 2); }
+        // a shore in front of the water: the land stands one level higher and hides the water's edge, so the surf is
+        // drawn where the water is still visible (not on top of the sand)
+        const kf = 0.36 + ph * 0.5;
+        if (y < n - 1 && W.elev[i + n] === 1) { const a = tp(0.06, 1 - kf), b = tp(0.94 - kf, 1 - kf); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
+        if (x < n - 1 && W.elev[i + 1] === 1) { const a = tp(1 - kf, 0.06), b = tp(1 - kf, 0.94 - kf); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
       }
       g.strokeStyle = 'rgba(255,255,255,' + (0.22 * (1 - nf * 0.6)).toFixed(3) + ')'; g.lineWidth = 1.6; g.lineCap = 'round'; g.stroke(); g.lineCap = 'butt';
     }
@@ -432,8 +440,8 @@
       const cars = T.cars;
       for (let q = 0; q < cars.length; q++) {
         const c = cars[q], wx = (c.x - c.y) * TW, wy = (c.x + c.y) * TH - c.e * EL; if (wx < vx0 - 40 || wx > vx1 + 40 || wy < vy0 - 40 || wy > vy1 + 40) continue;
-        const sp = S.vehicleH(c.type, c.h, c.type === 'car' ? c.col : c.col % 3), it = item(c.x + c.y + 0.02, 6); it.w = sp.w; it.h = sp.h; it.a = c.a;
-        it.c = nf > 0.6 ? S.night(sp, false) : sp.c; it.x = wx - sp.ox; it.y = wy - sp.oy - TH; it.wx = wx; it.wy = wy; it.d = c.d; it.car = c;
+        const sp = S.vehicleH(c.type, c.h, c.col, c.model), it = item(c.x + c.y + 0.02, 6); it.w = sp.w; it.h = sp.h; it.a = c.a;
+        it.c = nf > 0.6 ? S.night(sp, false) : sp.c; it.x = wx - sp.ox; it.y = wy - sp.oy - sp.cy; it.wx = wx; it.wy = wy; it.d = c.d; it.car = c;
       }
       if (z > 0.6) { const peds = T.peds; for (let q = 0; q < peds.length; q++) { const p = peds[q], wx = (p.x - p.y) * TW, wy = (p.x + p.y) * TH - p.e * EL; if (wx < vx0 || wx > vx1 || wy < vy0 || wy > vy1) continue; const it = item(p.x + p.y + 0.01, 4); it.x = wx; it.y = wy; it.col = p.col; it.ph = p.ph; } }
     }
@@ -467,7 +475,7 @@
             g.globalCompositeOperation = 'lighter'; g.save(); g.translate(fx, fy); g.rotate(Math.atan2(dy, dx)); g.globalAlpha = la * 0.7; g.drawImage(beamOf(), 0, -8, 30, 16); g.restore();
             g.globalAlpha = la; g.drawImage(glowOf('head'), fx - 4, fy - 4, 8, 8); g.drawImage(glowOf('tail'), it.wx - dx * 7 - 3, it.wy - dy * 7 - 6, 6, 6); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
           }
-          const c = it.car; if ((c.type === 'fire' || c.type === 'police') && (time * 4 % 1) < 0.5) { g.fillStyle = c.type === 'fire' ? '#ff3a2a' : '#3a7bff'; g.fillRect(it.wx - 1.5, it.wy - 11, 3, 2.5); }
+          const c = it.car; if ((c.type === 'fire' || c.type === 'police' || c.type === 'ambul') && (time * 4 % 1) < 0.5) { g.fillStyle = c.type === 'fire' ? '#ff3a2a' : '#3a7bff'; g.fillRect(it.wx - 1.5, it.wy - 11, 3, 2.5); }
           break;
         }
       }

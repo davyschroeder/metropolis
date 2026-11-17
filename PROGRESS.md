@@ -193,3 +193,14 @@ element, dragging over the highlighted area) – passes at 1366×768 and 390×84
 - If the files cannot be loaded (e.g. a copy of the game without the `music/` folder), the old generated tune plays instead.
 - Options show the current track and, in the city, a "Next track" button (`music-next` action in `menu.js`).
 - Window lights: realistic lamp colours (`S.WINCOL`: warm, neutral and cool white, rare TV blue and amber) and the on/off switching is rare now — 4 or 6 windows per building each reconsider every 3–10 minutes.
+
+## 0.12.0 — art fixes, bridges, vehicle models, playtest
+- **Nothing shines through any more.** Every `Art` keeps a 1× mask (`this.m`): window panes paint it (`A.pane`), everything drawn later erases it (`A.cover` in `A.poly`, cylinders, domes, trees, bushes, cooling towers, spheres). `A.done()` drops windows that are fully hidden and marks half-hidden ones (`p.part`); `nightOf` lights those through the mask (`sp.wm`), they get no bloom and never twinkle. Lights (`A.light`) covered by later geometry are dropped the same way — so register a light *after* drawing its fixture.
+- Designs fixed: coal plant stacks stand on a flue-gas hall, gas plant and three factory forms have their stacks on the roof, the university spire touches its dome, the far stadium mast is behind the bowl and the masts that covered the pitch are gone.
+- **Bridges**: on a water tile with a road the beach is drawn first and the deck on top (`drawDeck`); the old code drew a ramp down to the water over the deck. A deck next to a road on level-2 land gets a ramp up (`drawBanks` mode 2). Surf and the wet line at shores in front of the water are drawn in the visible water, not on the sand.
+- **Vehicle models** (`S.MODELS` in sprites.js, weights `MODEL_W` in traffic.js): 9 cars (sedan, hatchback, SUV, van, pickup with or without load, taxi, sports car, city car, motorbike), 5 lorries (box, tanker, flatbed, articulated, tipper), buses in four liveries, ambulances from clinics and hospitals. A model is a row of box stacks sorted by depth for the heading; `c.model` and `c.len` are set in `newCar`. Vehicle sprites are 0.75 tile (`sp.cy` is the centre offset).
+- **Playtest** (scripted mayor, 20 and 14 years on two maps, plus a stress run of every overlay, zoom level, weather type, disaster, quality level, resize, save/load): no script errors. Changes that came out of it:
+  - bus fares 0.55 → 0.12 per ride (one depot earned a quarter of the city's income);
+  - dusk in a big city: a blend from the previous step is reused until its turn to be redrawn (frame time at dusk 95 → 48 ms in the software renderer);
+  - sprite memory: by day the night versions are freed when the budget is exceeded, and when it is still exceeded (`S.full`) new buildings reuse looks that are already drawn.
+- Open observation: on normal difficulty a city of 25,000+ earns far more than it can spend (over a million in the bank after 14 years). Not changed.

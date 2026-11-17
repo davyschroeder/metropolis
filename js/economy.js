@@ -51,7 +51,7 @@
       else for (let d = 1; d <= 8; d++) if (city.districts[d].pol[p.id]) exp.policies += p.cost * dpop[d] / 100;
     }
     // transit fares
-    inc.fares = city.pol.transit ? 0 : city.transit.riders * 0.55; city.transit.fares = inc.fares;
+    inc.fares = city.pol.transit ? 0 : city.transit.riders * 0.12; /* a bus network roughly pays for itself; it is no money machine */ city.transit.fares = inc.fares;
     // loans
     for (let k = city.loans.length - 1; k >= 0; k--) {
       const l = city.loans[k], interest = l.left * l.rate / 12, pay = Math.min(l.left, l.pay);

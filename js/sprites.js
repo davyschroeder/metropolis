@@ -17,6 +17,9 @@
     const R = this.r = S.RES; this.s = size; this.h = h; this.W = size * 2 * TW + 4; this.H = size * 2 * TH + h + 4;
     this.c = mk(this.W * R, this.H * R); this.g = this.c.getContext('2d'); this.g.setTransform(R, 0, 0, R, 0, 0);
     this.ox = size * TW + 2; this.oy = h + 2; this.flip = 0; this.wins = []; this.smoke = []; this.lights = []; this.anim = null; this.top = 0; this.topX = 0; this.topY = 0; this.g.lineJoin = 'round';
+    // 1x mask of window glass that is still visible: windows paint it, everything drawn later erases it. Used so that
+    // lit windows never shine through a chimney, tree or wing that stands in front of them.
+    this.m = mk(this.W, this.H); this.mg = this.m.getContext('2d', { willReadFrequently: true });
   }
   S.Art = Art;
   const A = Art.prototype;
@@ -25,13 +28,21 @@
     if (z > this.top) { this.top = z; this.topX = P[0]; this.topY = P[1]; } return P;
   };
   // a light source drawn at night: 'lamp' warm, 'flood' bright white, 'cyan', 'red' blinking aviation light
-  A.light = function (u, v, z, k, r) { const P = this.p(u, v, z); this.lights.push({ x: P[0], y: P[1], k: k || 'lamp', r: r || 1 }); };
+  A.light = function (u, v, z, k, r) { const P = this.p(u, v, z); this.lights.push({ x: P[0], y: P[1], k: k || 'lamp', r: r || 1, occ: false }); };
+  // whatever is drawn now hides the windows and lights that were drawn before it at the same place
+  A.cover = function (Q) {
+    const mg = this.mg, n = Q.length; mg.globalCompositeOperation = 'destination-out'; mg.beginPath(); for (let i = 0; i < n; i++) { if (i) mg.lineTo(Q[i][0], Q[i][1]); else mg.moveTo(Q[i][0], Q[i][1]); } mg.closePath(); mg.fill(); mg.globalCompositeOperation = 'source-over';
+    const L = this.lights; for (let k = 0; k < L.length; k++) { const l = L[k]; if (l.occ) continue; let c = false; for (let i = 0, j = n - 1; i < n; j = i++) { const a = Q[i], b = Q[j]; if ((a[1] > l.y) !== (b[1] > l.y) && l.x < (b[0] - a[0]) * (l.y - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } if (c) l.occ = true; }
+  };
+  A.coverEll = function (x, y, rx, ry) { const mg = this.mg; mg.globalCompositeOperation = 'destination-out'; mg.beginPath(); mg.ellipse(x, y, rx, ry, 0, 0, 7); mg.fill(); mg.globalCompositeOperation = 'source-over'; const L = this.lights; for (let k = 0; k < L.length; k++) { const l = L[k], dx = (l.x - x) / rx, dy = (l.y - y) / ry; if (dx * dx + dy * dy < 1) l.occ = true; } };
+  // register a window pane (4 sprite-space points): it can be lit at night
+  A.pane = function (p) { const mg = this.mg; mg.fillStyle = '#fff'; mg.beginPath(); mg.moveTo(p[0][0], p[0][1]); mg.lineTo(p[1][0], p[1][1]); mg.lineTo(p[2][0], p[2][1]); mg.lineTo(p[3][0], p[3][1]); mg.closePath(); mg.fill(); this.wins.push(p); };
   // a small park/street lamp post with its light
   A.post = function (u, v, h) { h = h || 13; this.seg([u, v, 0], [u, v, h], '#3d4249', 1.2); this.box(u - 0.025, v - 0.025, u + 0.025, v + 0.025, h, h + 2.2, '#f1e7c8'); this.light(u, v, h + 1, 'lamp', 0.8); };
   A.poly = function (pts, fill, line) {
-    const g = this.g; g.beginPath();
-    for (let i = 0; i < pts.length; i++) { const P = this.p(pts[i][0], pts[i][1], pts[i][2]); if (i) g.lineTo(P[0], P[1]); else g.moveTo(P[0], P[1]); }
-    g.closePath(); if (fill) { g.fillStyle = fill; g.fill(); }
+    const g = this.g, Q = []; g.beginPath();
+    for (let i = 0; i < pts.length; i++) { const P = this.p(pts[i][0], pts[i][1], pts[i][2]); Q.push(P); if (i) g.lineTo(P[0], P[1]); else g.moveTo(P[0], P[1]); }
+    g.closePath(); if (fill) { g.fillStyle = fill; g.fill(); this.cover(Q); }
     if (line !== false) { g.strokeStyle = line || 'rgba(0,0,0,0.2)'; g.lineWidth = 0.7; g.stroke(); }
   };
   A.lA = function () { return this.flip ? DK : LT; }; A.lB = function () { return this.flip ? LT : DK; };
@@ -60,7 +71,7 @@
       const A0 = a0 + da * (c + mx), A1 = a0 + da * (c + 1 - mx), Z0 = z0 + dz * (r + mz), Z1 = z0 + dz * (r + 1 - mz);
       const p = [fpt(f, A0, fix, Z0), fpt(f, A1, fix, Z0), fpt(f, A1, fix, Z1), fpt(f, A0, fix, Z1)].map((q) => this.p(q[0], q[1], q[2]));
       g.beginPath(); g.moveTo(p[0][0], p[0][1]); g.lineTo(p[1][0], p[1][1]); g.lineTo(p[2][0], p[2][1]); g.lineTo(p[3][0], p[3][1]); g.closePath(); g.fillStyle = gl; g.fill();
-      if (!o.dark) this.wins.push(p);
+      if (!o.dark) this.pane(p);
     }
   };
   A.gable = function (u0, v0, u1, v1, z, h, roof, wall, axis) {
@@ -88,12 +99,13 @@
     g.fillStyle = gr; g.beginPath(); g.moveTo(c1[0] - rx, c1[1]); g.lineTo(c0[0] - rx, c0[1]); g.ellipse(c0[0], c0[1], rx, ry, 0, Math.PI, 0, true); g.lineTo(c1[0] + rx, c1[1]); g.closePath(); g.fill();
     g.strokeStyle = 'rgba(0,0,0,0.22)'; g.lineWidth = 0.7; g.stroke();
     g.fillStyle = sh(top || col, 1.14); g.beginPath(); g.ellipse(c1[0], c1[1], rx, ry, 0, 0, 7); g.fill(); g.stroke();
+    this.cover([[c1[0] - rx, c1[1]], [c0[0] - rx, c0[1]], [c0[0] - rx * 0.7, c0[1] + ry * 0.72], [c0[0], c0[1] + ry], [c0[0] + rx * 0.7, c0[1] + ry * 0.72], [c0[0] + rx, c0[1]], [c1[0] + rx, c1[1]], [c1[0] + rx * 0.7, c1[1] - ry * 0.72], [c1[0], c1[1] - ry], [c1[0] - rx * 0.7, c1[1] - ry * 0.72]]);
   };
   A.dome = function (u, v, r, z, col, hk) {
     const g = this.g, c = this.p(u, v, z), rx = r * TW * 1.414, ry = r * TH * 1.414, hh = rx * (hk || 0.8);
     const gr = g.createRadialGradient(c[0] - rx * 0.35, c[1] - hh * 0.6, 1, c[0], c[1], rx * 1.2); gr.addColorStop(0, sh(col, 1.3)); gr.addColorStop(1, sh(col, 0.62));
     g.fillStyle = gr; g.beginPath(); g.ellipse(c[0], c[1], rx, hh, 0, Math.PI, Math.PI * 2, false); g.ellipse(c[0], c[1], rx, ry, 0, 0, Math.PI, false); g.closePath(); g.fill();
-    g.strokeStyle = 'rgba(0,0,0,0.2)'; g.lineWidth = 0.7; g.stroke();
+    g.strokeStyle = 'rgba(0,0,0,0.2)'; g.lineWidth = 0.7; g.stroke(); this.coverEll(c[0], c[1] - hh * 0.3, rx, hh * 0.8);
   };
   A.gq = function (u0, v0, u1, v1, col, z, line) { this.poly([[u0, v0, z || 0], [u1, v0, z || 0], [u1, v1, z || 0], [u0, v1, z || 0]], col, line === undefined ? false : line); };
   A.lot = function (col, edge) { const s = this.s; this.gq(0, 0, s, s, col, 0, edge || 'rgba(0,0,0,0.16)'); };
@@ -109,6 +121,7 @@
         const w = (8.5 - k * 2.2) * sc, by = y - (3 + k * 5.5) * sc, ty = by - 9 * sc;
         g.fillStyle = k === 0 ? '#22573a' : k === 1 ? '#2a6641' : '#33774a'; g.beginPath(); g.moveTo(x - w, by); g.lineTo(x + w, by); g.lineTo(x, ty); g.closePath(); g.fill();
         g.fillStyle = 'rgba(255,255,255,0.10)'; g.beginPath(); g.moveTo(x - w, by); g.lineTo(x, by); g.lineTo(x, ty); g.closePath(); g.fill();
+        this.cover([[x - w, by], [x + w, by], [x, ty]]);
       }
     } else {
       const c = kind === 6 ? '#6aa63f' : kind === 7 ? '#c98a3a' : '#3f8c3f';
@@ -116,12 +129,13 @@
       g.fillStyle = sh(c, 0.78); g.beginPath(); g.arc(x + 1 * sc, y - 11 * sc, 7.5 * sc, 0, 7); g.fill();
       g.fillStyle = c; g.beginPath(); g.arc(x - 1.5 * sc, y - 13 * sc, 6.5 * sc, 0, 7); g.fill();
       g.fillStyle = sh(c, 1.2); g.beginPath(); g.arc(x - 3 * sc, y - 15.5 * sc, 3.4 * sc, 0, 7); g.fill();
+      this.coverEll(x - 0.3 * sc, y - 12 * sc, 8 * sc, 8 * sc);
     }
   };
   A.bush = function (u, v, col, sc) {
     const g = this.g, P = this.p(u, v, 0); sc = sc || 1; col = col || '#4a8f3c';
     g.fillStyle = sh(col, 0.8); g.beginPath(); g.arc(P[0] + 1, P[1] - 2 * sc, 4 * sc, 0, 7); g.fill();
-    g.fillStyle = col; g.beginPath(); g.arc(P[0] - 1, P[1] - 3 * sc, 3.2 * sc, 0, 7); g.fill();
+    g.fillStyle = col; g.beginPath(); g.arc(P[0] - 1, P[1] - 3 * sc, 3.2 * sc, 0, 7); g.fill(); this.coverEll(P[0], P[1] - 2.5 * sc, 4.4 * sc, 4 * sc);
   };
   A.car = function (u, v, col, axisU) {
     const l = 0.11, w = 0.055;
@@ -131,7 +145,19 @@
   A.flag = function (u, v, z, h, col) { this.seg([u, v, z], [u, v, z + h], '#d8d8d8', 1); const P = this.p(u, v, z + h), g = this.g; g.fillStyle = col; g.beginPath(); g.moveTo(P[0], P[1]); g.lineTo(P[0] + 8, P[1] + 2.5); g.lineTo(P[0], P[1] + 5); g.closePath(); g.fill(); };
   A.done = function () {
     if (this.top > 125) this.lights.push({ x: this.topX, y: this.topY - 2, k: 'red', r: 0.7 }); // aviation light on tall towers and chimneys
-    return { c: this.c, ox: this.ox, oy: this.oy, w: this.W, h: this.H, r: this.r, top: this.top, wins: this.wins, smoke: this.smoke, lights: this.lights, anim: this.anim, size: this.s };
+    // sort out what is still visible: windows fully hidden are dropped, partly hidden ones are lit through the mask
+    let wins = this.wins, wm = null; const lights = this.lights.filter(function (l) { return !l.occ; });
+    if (wins.length) {
+      const d = this.mg.getImageData(0, 0, this.W, this.H).data, W = this.W, H = this.H, keep = []; let part = 0;
+      const vis = function (x, y) { x = x | 0; y = y | 0; return x >= 0 && y >= 0 && x < W && y < H && d[(y * W + x) * 4 + 3] > 24; };
+      for (let i = 0; i < wins.length; i++) {
+        const p = wins[i], cx = (p[0][0] + p[1][0] + p[2][0] + p[3][0]) / 4, cy = (p[0][1] + p[1][1] + p[2][1] + p[3][1]) / 4; let n = vis(cx, cy) ? 1 : 0;
+        for (let k = 0; k < 4; k++) { if (vis(cx + (p[k][0] - cx) * 0.45, cy + (p[k][1] - cy) * 0.45)) n++; const q = p[(k + 1) & 3]; if (vis(cx + ((p[k][0] + q[0]) / 2 - cx) * 0.55, cy + ((p[k][1] + q[1]) / 2 - cy) * 0.55)) n++; }
+        if (n === 0) continue; if (n < 9) { p.part = true; part++; } keep.push(p);
+      }
+      wins = keep; if (part) wm = this.m;
+    }
+    return { c: this.c, ox: this.ox, oy: this.oy, w: this.W, h: this.H, r: this.r, top: this.top, wins: wins, wm: wm, smoke: this.smoke, lights: lights, anim: this.anim, size: this.s };
   };
 
   // ---------- palettes ----------
@@ -141,7 +167,7 @@
   const APT = ['#d8d2c4', '#c9c5bb', '#e2d6c2', '#bfc7cc', '#d6c2b0', '#cbd0c4'];
   const GLASS = ['#6aa6c8', '#5b99a9', '#7db0d5', '#8ea8bf', '#4f8eb2', '#69b3b0'];
   const AWN = ['#c8463c', '#2f7fb8', '#3c9a5a', '#d98b2b', '#8a4fa8', '#d1b03a'];
-  const CARCOL = ['#c8413a', '#e8e6e0', '#2f6fb0', '#2b2f36', '#d6b23a', '#7b8794', '#3f8f5a'];
+  const CARCOL = ['#c8413a', '#e8e6e0', '#2f6fb0', '#2b2f36', '#d6b23a', '#7b8794', '#3f8f5a', '#b9bec4', '#7a1f2a', '#1f3f6b', '#e07a2a', '#5a4a3c', '#8fb7d6', '#4a4f57'];
   S.CARCOL = CARCOL;
   function pk(r, a) { return a[(r() * a.length) | 0]; }
   function roofKit(a, r, u0, v0, u1, v1, H, n) {
@@ -385,7 +411,7 @@
     const frac = 0.2 + M.hash(sd, 3, 51) * 0.5, cool = M.hash(sd, 5, 52) < 0.18, mono = M.hash(sd, 7, 53) < 0.3 ? 1 + ((M.hash(sd, 9, 54) * 3) | 0) : 0;
     for (let i = 0; i < n; i++) {
       const h = M.hash(i, sd, 77);
-      if (h > frac) { if (tw.length < 24 && M.hash(i, sd, 78) < Math.max(0.12, 14 / n)) tw.push(i); continue; }
+      if (h > frac) { if (tw.length < 24 && !sp.wins[i].part && M.hash(i, sd, 78) < Math.max(0.12, 14 / n)) tw.push(i); continue; }
       const c = M.hash(i, sd, 79); lw[i] = mono && c < 0.75 ? mono : cool ? (c < 0.7 ? 6 : c < 0.92 ? 5 : 7) : (c < 0.3 ? 1 : c < 0.55 ? 2 : c < 0.73 ? 3 : c < 0.8 ? 4 : c < 0.9 ? 5 : c < 0.95 ? 6 : c < 0.975 ? 7 : 8);
     }
     return lw;
@@ -398,7 +424,9 @@
     g.setTransform(sp.r, 0, 0, sp.r, 0, 0);
     if (lit && sp.wins && sp.wins.length) {
       const lw = litOf(sp), sd = sp.sd || 0;
-      for (let i = 0; i < sp.wins.length; i++) { if (!lw[i]) continue; g.globalAlpha = 0.55 + 0.45 * M.hash(i, sd, 80); g.fillStyle = WINCOL[lw[i] - 1]; winPath(g, sp.wins[i]); g.fill(); }
+      let wg = g, wc = null; if (sp.wm) { wc = mk(c.width, c.height); wg = wc.getContext('2d'); wg.setTransform(sp.r, 0, 0, sp.r, 0, 0); }
+      for (let i = 0; i < sp.wins.length; i++) { if (!lw[i]) continue; wg.globalAlpha = 0.55 + 0.45 * M.hash(i, sd, 80); wg.fillStyle = WINCOL[lw[i] - 1]; winPath(wg, sp.wins[i]); wg.fill(); }
+      if (wc) { wg.setTransform(1, 0, 0, 1, 0, 0); wg.globalAlpha = 1; wg.globalCompositeOperation = 'destination-in'; wg.drawImage(sp.wm, 0, 0, c.width, c.height); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(wc, 0, 0); g.setTransform(sp.r, 0, 0, sp.r, 0, 0); } // only the visible part of a half-hidden window lights up
       g.globalAlpha = 1;
       if (M.settings.quality !== 'low') { // bake a soft glow around lit windows into the night sprite
         const bl = S.bloom(sp); if (bl) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.55; g.drawImage(bl, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; sp.bl = undefined; }
@@ -412,7 +440,7 @@
     const c = mk(sp.c.width, sp.c.height), g = c.getContext('2d'), lw = litOf(sp); g.setTransform(sp.r, 0, 0, sp.r, 0, 0);
     g.shadowBlur = 7 * sp.r;
     for (let i = 0; i < sp.wins.length; i++) {
-      if (!lw[i]) continue; const cold = lw[i] === 6 || lw[i] === 7;
+      if (!lw[i] || sp.wins[i].part) continue; const cold = lw[i] === 6 || lw[i] === 7; // no glow for a window that is half hidden
       g.shadowColor = cold ? 'rgba(190,210,255,0.9)' : 'rgba(255,196,128,0.95)'; g.fillStyle = cold ? 'rgba(215,228,255,0.5)' : 'rgba(255,214,160,0.5)';
       winPath(g, sp.wins[i]); g.fill();
     }
@@ -424,7 +452,8 @@
   S.blend = function (sp, lit, step) {
     const k = lit ? 'bL' : 'bD', ks = k + 's';
     if (sp[ks] === step) return sp[k];
-    if (S.blendBudget <= 0) return null; S.blendBudget--;
+    const have = sp[ks] !== undefined ? sp[k] : null; // a blend from the previous step is close enough until its turn comes
+    if (S.blendBudget <= (have ? 8 : 0)) return have; S.blendBudget--;
     const nc = S.night(sp, lit), c = (sp[ks] !== undefined && sp[k]) || mk(sp.c.width, sp.c.height), g = c.getContext('2d');
     g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.clearRect(0, 0, c.width, c.height); g.drawImage(sp.c, 0, 0);
     g.globalAlpha = step / 16; g.drawImage(nc, 0, 0); g.globalAlpha = 1; sp[k] = c; sp[ks] = step; S.blendStep = step; return c;
@@ -434,20 +463,20 @@
   function abandon(sp) {
     const g = sp.c.getContext('2d');
     g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(70,58,44,0.5)'; g.fillRect(0, 0, sp.w, sp.h); g.globalCompositeOperation = 'source-over';
-    for (let i = 0; i < sp.wins.length; i++) { const p = sp.wins[i]; g.fillStyle = M.hash(i, 3, 9) < 0.4 ? '#6b5540' : '#1d1a18'; g.beginPath(); g.moveTo(p[0][0], p[0][1]); g.lineTo(p[1][0], p[1][1]); g.lineTo(p[2][0], p[2][1]); g.lineTo(p[3][0], p[3][1]); g.closePath(); g.fill(); }
+    for (let i = 0; i < sp.wins.length; i++) { const p = sp.wins[i]; if (p.part) continue; g.fillStyle = M.hash(i, 3, 9) < 0.4 ? '#6b5540' : '#1d1a18'; g.beginPath(); g.moveTo(p[0][0], p[0][1]); g.lineTo(p[1][0], p[1][1]); g.lineTo(p[2][0], p[2][1]); g.lineTo(p[3][0], p[3][1]); g.closePath(); g.fill(); }
     sp.wins = []; sp.smoke = [];
   }
   // ---------- sprite lookups ----------
   // Each zone level has several building forms (S.zforms, extended in sprites3.js); a variant picks a form and
   // a style seed, so a level has NV distinct looks instead of 4.
-  S.NV = 80; S.tick = 0; S.genMs = 0; S.GEN_BUDGET = 6; const fallback = new Map();
+  S.NV = 80; S.tick = 0; S.genMs = 0; S.full = false; S.GEN_BUDGET = 6; const fallback = new Map();
   S.zforms = [null]; for (let z = 1; z <= 3; z++) { S.zforms[z] = [null]; for (let l = 1; l <= 5; l++) S.zforms[z][l] = [ZD[z][l]]; }
   S.ZH = ZH;
   S.zoned = function (z, lvl, wealth, v, f, ab) {
     const key = 'z' + z + lvl + wealth + '.' + v + '.' + f + (ab ? 'x' : ''); let sp = S.cache.get(key); if (sp) { sp.u = S.tick; return sp; }
     // drawing a sprite costs a few ms: when many new ones scroll into view at once, spread the work over frames
     // and show a ready-made neighbour of the same kind in the meantime
-    const fk = z * 100 + lvl * 10 + f; if (S.genMs > S.GEN_BUDGET) { const fb = fallback.get(fk); if (fb && S.cache.get(fb.key) === fb) { fb.u = S.tick; return fb; } }
+    const fk = z * 100 + lvl * 10 + f; if (S.genMs > S.GEN_BUDGET || S.full) { /* S.full: sprite memory is used up, so reuse looks that are already drawn */ const fb = fallback.get(fk); if (fb && S.cache.get(fb.key) === fb) { fb.u = S.tick; return fb; } }
     const t0 = performance.now(), size = M.ZB[z].size[lvl], a = new Art(size, ZH[z][lvl]); a.flip = f;
     const forms = S.zforms[z][lvl], fi = v % forms.length;
     forms[fi](a, M.rng(z * 1000 + lvl * 100 + wealth * 10 + v * 131 + 7), wealth, (v / forms.length) | 0);
@@ -463,9 +492,12 @@
   S.trim = function () {
     const budget = (M.settings && M.settings.quality === 'low' ? 60 : M.settings && M.settings.quality === 'medium' ? 110 : 170) * 1048576;
     let tot = 0; const old = []; S.cache.forEach(function (sp, k) { tot += S.bytes(sp); if (sp.u !== undefined && S.tick - sp.u > 240) old.push([sp.u, k, sp]); });
-    S.memMB = Math.round(tot / 1048576); if (tot <= budget) return;
+    // by day the night versions are not needed: free them first (they are redrawn at the next dusk)
+    if (tot > budget && M.Render && M.Render.night < 0.02) S.cache.forEach(function (sp) { if (sp.n || sp.nd || sp.bL || sp.bD) { tot -= S.bytes(sp); sp.n = sp.nd = sp.bL = sp.bD = sp.bLs = sp.bDs = undefined; tot += S.bytes(sp); } });
+    S.memMB = Math.round(tot / 1048576); S.full = tot > budget * 1.15; if (tot <= budget) return;
     old.sort(function (p, q) { return p[0] - q[0]; });
     for (let i = 0; i < old.length && tot > budget * 0.7; i++) { tot -= S.bytes(old[i][2]); S.cache.delete(old[i][1]); }
+    S.full = tot > budget * 1.15;
   };
   S.def = function (id, f, v) {
     const d = S.designs[id]; if (!d) return null; const vv = d.variants ? (v || 0) % d.variants : 0, key = 'd' + id + (f ? 1 : 0) + vv; let sp = S.cache.get(key); if (sp) return sp;
@@ -507,27 +539,54 @@
   };
   // vehicles: type, axis (1 = along u/x, 0 = along v/y), colour index
   // d: driving direction 0 N, 1 E, 2 S, 3 W — the front (cab, bonnet, windscreen) always points that way
-  // vehicles are drawn for 16 headings (0 = +u, 4 = +v, 8 = -u, 12 = -v) so they can turn through a bend
-  S.vehicleH = function (type, h, col) {
-    const sp = S.misc('veh' + type + '.' + h + '.' + col, 1, 18, function (a) {
-      const th = h * Math.PI / 8, cx = Math.cos(th), cy = Math.sin(th);
+  // vehicles are drawn for 16 headings (0 = +u, 4 = +v, 8 = -u, 12 = -v) so they can turn through a bend.
+  // A vehicle is a row of segments along its length (o = offset from the centre, + = front); every segment is a stack
+  // of boxes [halfLength, halfWidth, z0, z1, colour, extraOffset]. Segments are drawn back to front for the heading.
+  const GLS = '#26323f', WSC = '#7fa8c8', CHAS = '#3a3d42', CARGO = ['#e8e6e0', '#c9cdd1', '#d9c28a', '#b0483f', '#2f6fb0', '#3c8f5a', '#d98b2b', '#5b6670'];
+  const VS = 0.75; // sprite size in tiles: big enough for the longest lorry at any heading
+  const MODELS = {
+    car: [ // [palette, builder]
+      { n: 'sedan', nv: 10, pal: [0, 1, 2, 3, 5, 7, 8, 9, 12, 13], f: function (c) { return [{ o: 0, p: [[0.13, 0.06, 0.5, 3.6, c], [0.065, 0.052, 3.6, 6, GLS, -0.02], [0.012, 0.05, 3.6, 5.6, WSC, 0.05]] }]; } },
+      { n: 'hatch', nv: 8, pal: [0, 1, 2, 4, 6, 10, 12, 7], f: function (c) { return [{ o: 0, p: [[0.11, 0.06, 0.5, 3.7, c], [0.068, 0.053, 3.7, 6.1, GLS, -0.035], [0.012, 0.051, 3.7, 5.7, WSC, 0.04]] }]; } },
+      { n: 'suv', nv: 8, pal: [3, 1, 5, 9, 8, 11, 13, 6], f: function (c) { return [{ o: 0, p: [[0.135, 0.064, 0.8, 4.5, c], [0.09, 0.056, 4.5, 7.3, GLS, -0.025], [0.012, 0.054, 4.5, 6.9, WSC, 0.07], [0.07, 0.03, 7.3, 7.7, '#8a8f96', -0.03]] }]; } },
+      { n: 'van', nv: 6, pal: [1, 7, 2, 4, 10, 5], f: function (c) { return [{ o: -0.02, p: [[0.115, 0.064, 0.6, 7.2, c]] }, { o: 0.12, p: [[0.03, 0.064, 0.6, 6.6, c], [0.012, 0.058, 3.8, 6.2, WSC, 0.022]] }]; } },
+      { n: 'pickup', nv: 16, pal: [0, 3, 5, 9, 11, 1, 6, 10], f: function (c, k) { return [{ o: -0.07, p: [[0.075, 0.062, 0.6, 3.4, c]].concat(k >= 8 ? [[0.05, 0.045, 3.4, 5.4, CARGO[(k * 3) % 8]]] : []) }, { o: 0.055, p: [[0.085, 0.062, 0.6, 3.6, c], [0.045, 0.054, 3.6, 6.2, GLS, -0.03], [0.012, 0.052, 3.6, 5.8, WSC, 0.02]] }]; } },
+      { n: 'taxi', nv: 1, pal: [4], f: function (c) { return [{ o: 0, p: [[0.13, 0.06, 0.5, 3.6, '#e8b82a'], [0.065, 0.052, 3.6, 6, GLS, -0.02], [0.012, 0.05, 3.6, 5.6, WSC, 0.05], [0.018, 0.03, 6, 7.3, '#f6f2d8', -0.02]] }]; } },
+      { n: 'sport', nv: 6, pal: [0, 4, 10, 2, 3, 1], f: function (c) { return [{ o: 0, p: [[0.132, 0.061, 0.4, 2.9, c], [0.05, 0.05, 2.9, 4.7, GLS, -0.025], [0.012, 0.048, 2.9, 4.4, WSC, 0.03], [0.012, 0.058, 2.9, 3.8, c, -0.115]] }]; } },
+      { n: 'mini', nv: 8, pal: [0, 12, 6, 4, 1, 10, 2, 8], f: function (c) { return [{ o: 0, p: [[0.095, 0.056, 0.5, 3.8, c], [0.062, 0.05, 3.8, 6.3, GLS, -0.012], [0.011, 0.048, 3.8, 5.9, WSC, 0.052]] }]; } },
+      { n: 'moto', nv: 4, pal: [3, 0, 2, 10], f: function (c) { return [{ o: 0, p: [[0.065, 0.016, 0.6, 3, '#2b2f36'], [0.02, 0.024, 3, 6.4, c, -0.01], [0.012, 0.018, 6.4, 8, '#e8e6e0', -0.008]] }]; } }
+    ],
+    truck: [
+      { n: 'box', nv: 12, pal: [0, 1, 2, 3, 4, 6], f: function (c, k) { return [{ o: -0.03, p: [[0.16, 0.07, 0.5, 8.2, CARGO[(k >> 1) % 3]]] }, { o: 0.18, p: [[0.045, 0.065, 0.5, 6.5, c], [0.011, 0.06, 3.6, 6, WSC, 0.036]] }]; } },
+      { n: 'tanker', nv: 8, pal: [0, 2, 1, 6], f: function (c, k) { return [{ o: -0.03, p: [[0.16, 0.06, 0.5, 2.2, CHAS], [0.15, 0.052, 2.2, 7.4, k % 2 ? '#c9cdd1' : '#e8e6e0'], [0.14, 0.03, 7.4, 8, '#9aa0a6']] }, { o: 0.18, p: [[0.045, 0.065, 0.5, 6.5, c], [0.011, 0.06, 3.6, 6, WSC, 0.036]] }]; } },
+      { n: 'flatbed', nv: 10, pal: [0, 2, 4, 5, 10], f: function (c, k) { return [{ o: -0.1, p: [[0.085, 0.068, 0.5, 2.4, CHAS], [0.055, 0.05, 2.4, 6.2, CARGO[(k + 3) % 8]]] }, { o: 0.04, p: [[0.065, 0.068, 0.5, 2.4, CHAS], [0.04, 0.05, 2.4, 5.2, CARGO[(k + 5) % 8]]] }, { o: 0.18, p: [[0.045, 0.065, 0.5, 6.5, c], [0.011, 0.06, 3.6, 6, WSC, 0.036]] }]; } },
+      { n: 'semi', nv: 12, pal: [0, 2, 1, 3, 6, 10], f: function (c, k) { return [{ o: -0.07, p: [[0.2, 0.068, 0.5, 2, CHAS], [0.2, 0.07, 2, 9.4, CARGO[(k * 3 + 3) % 8]]] }, { o: 0.2, p: [[0.05, 0.066, 0.5, 7.4, c], [0.011, 0.06, 4, 6.8, WSC, 0.041]] }]; } },
+      { n: 'dump', nv: 3, pal: [4, 10, 0], f: function (c) { return [{ o: -0.05, p: [[0.14, 0.066, 0.5, 2.6, CHAS], [0.13, 0.07, 2.6, 7, c], [0.11, 0.055, 7, 7.6, '#6b5a48']] }, { o: 0.17, p: [[0.045, 0.065, 0.5, 6.5, c], [0.011, 0.06, 3.6, 6, WSC, 0.036]] }]; } }
+    ],
+    bus: [{ n: 'bus', nv: 4, pal: [0], f: function (c, k) { const bc = ['#e8a92a', '#2f7fb8', '#3c9a5a', '#c8463c'][k % 4]; return [{ o: 0, p: [[0.2, 0.07, 0.5, 7.5, bc], [0.19, 0.072, 3.5, 6, GLS], [0.012, 0.073, 1.5, 6.4, '#9fc4e0', 0.195], [0.19, 0.066, 7.5, 7.9, '#f1f1ee']] }]; } }],
+    fire: [{ n: 'fire', pal: [0], f: function () { return [{ o: 0, p: [[0.19, 0.07, 0.5, 7, '#c8322a'], [0.12, 0.03, 7, 8.4, '#e6e6e6', -0.03], [0.04, 0.066, 3.5, 6.2, GLS, 0.13]] }]; } }],
+    police: [{ n: 'police', pal: [0], f: function () { return [{ o: 0, p: [[0.13, 0.06, 0.5, 3.6, '#f1f1f1'], [0.065, 0.052, 3.6, 6, '#22355a', -0.02], [0.012, 0.05, 3.6, 5.6, WSC, 0.05], [0.02, 0.04, 6, 7.2, '#3a7bff']] }]; } }],
+    garbage: [{ n: 'garbage', pal: [0], f: function () { return [{ o: -0.03, p: [[0.17, 0.07, 0.5, 8, '#3f8f5a'], [0.03, 0.07, 0.5, 5, '#2f6b44', -0.17]] }, { o: 0.185, p: [[0.045, 0.066, 0.5, 6.5, '#e8e6e0'], [0.011, 0.06, 3.6, 6, WSC, 0.036]] }]; } }],
+    ambul: [{ n: 'ambul', pal: [0], f: function () { return [{ o: -0.02, p: [[0.115, 0.064, 0.6, 7.4, '#f4f4f1'], [0.115, 0.066, 3, 4.2, '#d8332e'], [0.03, 0.04, 7.4, 8.5, '#3a7bff', 0.05]] }, { o: 0.12, p: [[0.03, 0.064, 0.6, 6.6, '#f4f4f1'], [0.012, 0.058, 3.8, 6.2, WSC, 0.022]] }]; } }]
+  };
+  S.MODELS = MODELS;
+  S.vehicleH = function (type, h, col, model) {
+    const list = MODELS[type] || MODELS.car, mi = (model || 0) % list.length, md = list[mi], k = (col || 0) % (md.nv || 1), ci = md.pal[k % md.pal.length], key = 'veh' + type + mi + '.' + h + '.' + k;
+    const sp = S.misc(key, VS, 18, function (a) {
+      const th = h * Math.PI / 8, cx = Math.cos(th), cy = Math.sin(th), C0 = VS / 2;
       const bx = function (l, w, z0, z1, c, o) {
-        o = o || 0; const mx = 0.5 + cx * o, my = 0.5 + cy * o;
+        const mx = C0 + cx * o, my = C0 + cy * o;
         const P = [[mx + cx * l - cy * w, my + cy * l + cx * w], [mx + cx * l + cy * w, my + cy * l - cx * w], [mx - cx * l + cy * w, my - cy * l - cx * w], [mx - cx * l - cy * w, my - cy * l + cx * w]];
         const N = [[cx, cy], [cy, -cx], [-cx, -cy], [-cy, cx]];
         for (let i = 0; i < 4; i++) { const n = N[i]; if (n[0] + n[1] <= 0.001) continue; const p = P[i], q = P[(i + 1) & 3]; a.poly([[p[0], p[1], z0], [q[0], q[1], z0], [q[0], q[1], z1], [p[0], p[1], z1]], sh(c, 0.84 + 0.12 * (n[1] - n[0]) / (Math.abs(n[0]) + Math.abs(n[1])))); }
         a.poly([[P[0][0], P[0][1], z1], [P[1][0], P[1][1], z1], [P[2][0], P[2][1], z1], [P[3][0], P[3][1], z1]], sh(c, 1.12));
       };
-      if (type === 'car') { bx(0.13, 0.06, 0.5, 3.6, CARCOL[col]); bx(0.065, 0.052, 3.6, 6, '#26323f', -0.02); bx(0.012, 0.05, 3.6, 5.6, '#7fa8c8', 0.05); }
-      else if (type === 'truck') { const first = cx + cy > 0; if (first) bx(0.16, 0.07, 0.5, 8, ['#e8e6e0', '#c9cdd1', '#d9c28a'][col % 3]); bx(0.045, 0.065, 0.5, 6.5, CARCOL[col], 0.21); if (!first) bx(0.16, 0.07, 0.5, 8, ['#e8e6e0', '#c9cdd1', '#d9c28a'][col % 3]); }
-      else if (type === 'bus') { bx(0.2, 0.07, 0.5, 7.5, '#e8a92a'); bx(0.19, 0.072, 3.5, 6, '#26323f'); bx(0.012, 0.073, 1.5, 6.4, '#9fc4e0', 0.195); }
-      else if (type === 'fire') { bx(0.19, 0.07, 0.5, 7, '#c8322a'); bx(0.12, 0.03, 7, 8.4, '#e6e6e6', -0.03); bx(0.04, 0.066, 3.5, 6.2, '#26323f', 0.13); }
-      else if (type === 'police') { bx(0.13, 0.06, 0.5, 3.6, '#f1f1f1'); bx(0.065, 0.052, 3.6, 6, '#22355a', -0.02); bx(0.012, 0.05, 3.6, 5.6, '#7fa8c8', 0.05); bx(0.02, 0.04, 6, 7.2, '#3a7bff'); }
-      else if (type === 'garbage') { const first = cx + cy > 0; if (first) bx(0.17, 0.07, 0.5, 8, '#3f8f5a'); bx(0.045, 0.066, 0.5, 6.5, '#e8e6e0', 0.2); if (!first) bx(0.17, 0.07, 0.5, 8, '#3f8f5a'); }
+      const segs = md.f(CARCOL[ci], k).slice().sort(function (p, q) { return (p.o - q.o) * (cx + cy); });
+      for (const sg of segs) for (const b of sg.p) bx(b[0], b[1], b[2], b[3], b[4], sg.o + (b[5] || 0));
     });
-    sp.u = S.tick; return sp;
+    sp.u = S.tick; sp.cy = VS * TH; return sp;
   };
-  S.vehicle = function (type, d, col) { return S.vehicleH(type, ((d + 3) & 3) * 4, col); }; // d: 1 = +u, 2 = +v, 3 = -u, 0 = -v
+  S.vehicle = function (type, d, col, model) { return S.vehicleH(type, ((d + 3) & 3) * 4, col, model); }; // d: 1 = +u, 2 = +v, 3 = -u, 0 = -v
   // UI thumbnail of any sprite
   S.thumb = function (sp, w, h) {
     const c = mk(w, h), g = c.getContext('2d'); if (!sp) return c;

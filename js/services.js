@@ -22,7 +22,7 @@
   S.update = function (W, city) {
     const R = M.Roads, n = W.n; R.components(W);
     for (const k of MAPS) W[k].fill(0);
-    const t = S.totals = { seats: 0, seats2: 0, seats3: 0, health: 0, graves: 0, libs: 0, buses: 0, regional: 0, cargo: 0, airport: 0, commerce: 0, healthBonus: 0, trucks: 0, stops: 0, svcJobs: 0, fireSt: [], policeSt: [], depots: [], waste: [] };
+    const t = S.totals = { seats: 0, seats2: 0, seats3: 0, health: 0, graves: 0, libs: 0, buses: 0, regional: 0, cargo: 0, airport: 0, commerce: 0, healthBonus: 0, trucks: 0, stops: 0, svcJobs: 0, fireSt: [], policeSt: [], hospSt: [], depots: [], waste: [] };
     const depotComps = {};
     W.each(function (b) { if (b.z || !b.on || b.t !== 'busdepot') return; const rd = R.access(W, b); if (rd >= 0) { depotComps[W.rcomp[rd]] = (depotComps[W.rcomp[rd]] || 0) + M.DEFS.busdepot.buses * M.upMul(b) * M.bf('transit'); t.depots.push(b); } });
     for (const k in depotComps) t.buses += depotComps[k];
@@ -35,7 +35,7 @@
       if (d.cap) t.health += d.cap * up * f; if (d.graves) t.graves += d.graves; if (d.lib) t.libs++;
       if (d.regional) t.regional += d.regional; if (d.cargo) t.cargo++; if (d.air_port) t.airport++;
       if (d.commerce) t.commerce += d.commerce; if (d.health) t.healthBonus += d.health;
-      if (b.t === 'fire') t.fireSt.push(b); if (b.t === 'police') t.policeSt.push(b); if (d.garbage) t.waste.push(b);
+      if (b.t === 'fire') t.fireSt.push(b); if (b.t === 'police') t.policeSt.push(b); if (b.t === 'hospital' || b.t === 'clinic') t.hospSt.push(b); if (d.garbage) t.waste.push(b);
       if (d.bus) { const rd = W.findRoad(b.x, b.y, 1, 1); if (rd >= 0 && depotComps[W.rcomp[rd]]) { stamp(W, W.bus, cx, cy, 5.5, 1); t.stops++; b.busOK = true; } else b.busOK = false; }
     });
     void n;

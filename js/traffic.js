@@ -93,13 +93,16 @@
   // ---------------- visible agents ----------------
   // Cars drive on the right-hand lane, follow smooth curves through turns, keep their distance, accelerate and brake,
   // stop at red lights and give way at junctions (one entry direction at a time holds a junction).
-  const CAR_COLS = 7, BASE = 0.95, LEN = { car: 0.27, police: 0.27, truck: 0.36, garbage: 0.36, bus: 0.42, fire: 0.4 };
+  const CAR_COLS = 240, BASE = 0.95, LEN = { car: 0.27, police: 0.27, truck: 0.4, garbage: 0.4, bus: 0.42, fire: 0.4, ambul: 0.3 };
+  const MLEN = { car: [0.27, 0.24, 0.28, 0.3, 0.3, 0.27, 0.27, 0.21, 0.16], truck: [0.42, 0.42, 0.42, 0.52, 0.4] }; // length per model, for keeping distance
+  const MODEL_W = { car: [26, 20, 14, 9, 8, 5, 3, 10, 3], truck: [34, 14, 16, 22, 14] }; // how common each model is (order as in Sprites.MODELS)
+  function pickModel(type) { const w = MODEL_W[type]; if (!w) return 0; let t = 0; for (let i = 0; i < w.length; i++) t += w[i]; let r = M.rand() * t; for (let i = 0; i < w.length; i++) { r -= w[i]; if (r < 0) return i; } return 0; }
   let laneMap = new Map(), occ = new Map(), n = 0, Wd = null;
   function newCar(path, type) {
     const c = T.free.pop() || {};
     c.p = path; c.k = 0; c.t = 0; c.v = 0; c.type = type; c.col = (M.rand() * CAR_COLS) | 0; c.x = 0; c.y = 0; c.e = 1; c.d = 0; c.ax = 1; c.h = 0; c.hx = 1; c.hy = 0;
     c.cb = null; c.cb2 = null; c.wait = 0; c.loop = false; c.ret = false; c.dead = false; c.g = null; c.gk = -1; c.a = 0; c.out = false;
-    c.blocked = 0; c.ghost = 0; c.stops = null; c.emerg = type === 'fire'; c.len = LEN[type] || 0.27;
+    c.blocked = 0; c.ghost = 0; c.stops = null; c.emerg = type === 'fire'; c.model = pickModel(type); c.len = (MLEN[type] && MLEN[type][c.model]) || LEN[type] || 0.27;
     return c;
   }
   T.dispatch = function (path, kind, onArrive, onDone) {
@@ -124,7 +127,7 @@
     g.nturn = k < L - 2 && dOut >= 0 && dirOf(p[k + 1], p[k + 2]) !== dOut; // a bend is coming: brake before it, not in it
     g.sig = dOut >= 0 && M.Roads.signal(W, p[k + 1]); g.junc = dOut >= 0 && M.Roads.driveCount(W, p[k + 1]) >= 3;
     const rt = M.ROADS[W.road[i]] || M.ROADS[2], r = rt.cap ? W.traffic[i] / rt.cap : 0;
-    g.vmax = rt.speed * BASE * M.roadCond / (1 + Math.min(1.5, r * r * 0.5)) * (g.turn ? 0.55 : 1) * (c.type === 'car' || c.type === 'police' ? 1 : 0.82);
+    g.vmax = rt.speed * BASE * M.roadCond / (1 + Math.min(1.5, r * r * 0.5)) * (g.turn ? 0.55 : 1) * (c.type === 'car' || c.type === 'police' || c.type === 'ambul' ? 1 : 0.82);
     if (c.emerg) g.vmax = Math.max(g.vmax * 1.6, 1.8);
     c.gk = k;
   }
@@ -224,7 +227,7 @@
   function spawnService(W, city) {
     const tot = M.Services.totals; if (!tot || !T.origins || !T.origins.length) return;
     const R = M.Roads, kinds = [];
-    if (tot.policeSt.length) kinds.push(['police', tot.policeSt]); if (tot.waste.length) kinds.push(['garbage', tot.waste]);
+    if (tot.policeSt.length) kinds.push(['police', tot.policeSt]); if (tot.waste.length) kinds.push(['garbage', tot.waste]); if (tot.hospSt && tot.hospSt.length) kinds.push(['ambul', tot.hospSt]);
     if (!kinds.length) return;
     const k = M.pick(kinds), st = M.pick(k[1]), dst = M.pick(T.origins); if (st.dead || dst.dead) return;
     let cnt = 0; for (const c of T.cars) if (c.type === k[0]) cnt++; if (cnt >= 3) return;

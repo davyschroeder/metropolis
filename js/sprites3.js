@@ -34,8 +34,8 @@
   function solar(a, u0, v0, nu, nv, z) { for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) a.poly([[u0 + i * 0.3, v0 + j * 0.3, z], [u0 + 0.24 + i * 0.3, v0 + j * 0.3, z], [u0 + 0.24 + i * 0.3, v0 + 0.24 + j * 0.3, z + 3], [u0 + i * 0.3, v0 + 0.24 + j * 0.3, z + 3]], '#2d4f86', 'rgba(255,255,255,0.4)'); }
   function tank(a, u, v, rad, h, col, band) { a.cyl(u, v, rad, 0, h, col); if (band) a.cyl(u, v, rad * 1.03, h * 0.7, h * 0.78, band); }
   function silo(a, u, v, rad, h, col) { a.cyl(u, v, rad, 0, h, col); a.dome(u, v, rad, h, sh(col, 1.05), 0.55); }
-  function sphere(a, u, v, rad, z, col) { for (let k = 0; k < 4; k++) { const du = (k & 1 ? 1 : -1) * rad * 0.6, dv = (k & 2 ? 1 : -1) * rad * 0.6; a.seg([u + du, v + dv, 0], [u + du, v + dv, z + 2], '#6b7077', 1.2); } const P = a.p(u, v, z + rad * TW), g = a.g, R = rad * TW * 1.3; const gr = g.createRadialGradient(P[0] - R * 0.35, P[1] - R * 0.4, 1, P[0], P[1], R * 1.1); gr.addColorStop(0, sh(col, 1.3)); gr.addColorStop(1, sh(col, 0.6)); g.fillStyle = gr; g.beginPath(); g.arc(P[0], P[1], R, 0, 7); g.fill(); g.strokeStyle = 'rgba(0,0,0,0.2)'; g.lineWidth = 0.7; g.stroke(); a.p(u, v, z + rad * TW * 2.2); }
-  function stack(a, u, v, rad, h, col, band, k) { a.cyl(u, v, rad, 0, h, col); if (band) { a.cyl(u, v, rad * 1.05, h * 0.8, h * 0.86, band); a.cyl(u, v, rad * 1.05, h * 0.92, h * 0.96, band); } a.smokeAt(u, v, h + 2, k == null ? 1 : k); }
+  function sphere(a, u, v, rad, z, col) { for (let k = 0; k < 4; k++) { const du = (k & 1 ? 1 : -1) * rad * 0.6, dv = (k & 2 ? 1 : -1) * rad * 0.6; a.seg([u + du, v + dv, 0], [u + du, v + dv, z + 2], '#6b7077', 1.2); } const P = a.p(u, v, z + rad * TW), g = a.g, R = rad * TW * 1.3; const gr = g.createRadialGradient(P[0] - R * 0.35, P[1] - R * 0.4, 1, P[0], P[1], R * 1.1); gr.addColorStop(0, sh(col, 1.3)); gr.addColorStop(1, sh(col, 0.6)); g.fillStyle = gr; g.beginPath(); g.arc(P[0], P[1], R, 0, 7); g.fill(); g.strokeStyle = 'rgba(0,0,0,0.2)'; g.lineWidth = 0.7; g.stroke(); a.coverEll(P[0], P[1], R, R); a.p(u, v, z + rad * TW * 2.2); }
+  function stack(a, u, v, rad, h, col, band, k, z0) { a.cyl(u, v, rad, z0 || 0, h, col); if (band) { a.cyl(u, v, rad * 1.05, h * 0.8, h * 0.86, band); a.cyl(u, v, rad * 1.05, h * 0.92, h * 0.96, band); } a.smokeAt(u, v, h + 2, k == null ? 1 : k); }
   // round tower with lit windows on the visible half
   function cylTower(a, u, v, rad, z0, H, wall, glass, fh) {
     a.cyl(u, v, rad, z0, H, wall); fh = fh || 8.5; a.p(u, v, H);
@@ -45,7 +45,7 @@
       for (let k = 0; k < n; k++) {
         const a0 = Math.PI * (k + 0.14) / n, a1 = Math.PI * (k + 0.86) / n, x0 = c[0] - Math.cos(a0) * rx, y0 = c[1] + Math.sin(a0) * ry, x1 = c[0] - Math.cos(a1) * rx, y1 = c[1] + Math.sin(a1) * ry;
         const p = [[x0, y0 - zb], [x1, y1 - zb], [x1, y1 - zt], [x0, y0 - zt]];
-        g.fillStyle = sh(glass, 1.08 - 0.5 * k / n); g.beginPath(); g.moveTo(p[0][0], p[0][1]); g.lineTo(p[1][0], p[1][1]); g.lineTo(p[2][0], p[2][1]); g.lineTo(p[3][0], p[3][1]); g.closePath(); g.fill(); a.wins.push(p);
+        g.fillStyle = sh(glass, 1.08 - 0.5 * k / n); g.beginPath(); g.moveTo(p[0][0], p[0][1]); g.lineTo(p[1][0], p[1][1]); g.lineTo(p[2][0], p[2][1]); g.lineTo(p[3][0], p[3][1]); g.closePath(); g.fill(); a.pane(p);
       }
     }
   }
@@ -53,7 +53,7 @@
     const g = a.g, c0 = a.p(u, v, 0), rx = rad * TW * 1.414, ry = rx / 2, top = c0[1] - h, wr = rx * 0.6, tr = rx * 0.72; a.p(u, v, h);
     const gr = g.createLinearGradient(c0[0] - rx, 0, c0[0] + rx, 0); gr.addColorStop(0, sh(col, 1.08)); gr.addColorStop(0.45, sh(col, 0.95)); gr.addColorStop(1, sh(col, 0.6));
     g.fillStyle = gr; g.beginPath(); g.moveTo(c0[0] - rx, c0[1]); g.quadraticCurveTo(c0[0] - wr * 0.85, c0[1] - h * 0.6, c0[0] - tr, top); g.lineTo(c0[0] + tr, top); g.quadraticCurveTo(c0[0] + wr * 0.85, c0[1] - h * 0.6, c0[0] + rx, c0[1]); g.ellipse(c0[0], c0[1], rx, ry, 0, 0, Math.PI, false); g.closePath(); g.fill();
-    g.strokeStyle = 'rgba(0,0,0,0.2)'; g.lineWidth = 0.7; g.stroke(); g.fillStyle = sh(col, 0.5); g.beginPath(); g.ellipse(c0[0], top, tr, tr / 2, 0, 0, 7); g.fill(); a.smokeAt(u, v, h + 2, 2);
+    g.strokeStyle = 'rgba(0,0,0,0.2)'; g.lineWidth = 0.7; g.stroke(); g.fillStyle = sh(col, 0.5); g.beginPath(); g.ellipse(c0[0], top, tr, tr / 2, 0, 0, 7); g.fill(); a.cover([[c0[0] - rx, c0[1]], [c0[0] - wr, c0[1] - h * 0.6], [c0[0] - tr, top - tr / 2], [c0[0] + tr, top - tr / 2], [c0[0] + wr, c0[1] - h * 0.6], [c0[0] + rx, c0[1]], [c0[0], c0[1] + ry]]); a.smokeAt(u, v, h + 2, 2);
   }
   S.kit3 = { block: block, cylTower: cylTower, ri: ri, rf: rf };
 
@@ -477,7 +477,7 @@
   function I2b(a, r, w, v) { // small saw-tooth factory
     a.lot('#8a8880'); const wall = pk(r, BRICK.concat(METAL)), roof = '#6c737a';
     a.box(0.08, 0.12, 0.92, 0.78, 0, 15, wall); a.win('A', 0.12, 0.88, 0.78, 6, 12, 5, 1, { glass: '#7fa9c2' }); a.win('B', 0.18, 0.74, 0.92, 6, 12, 3, 1, { glass: '#7fa9c2' }); a.face('A', 0.4, 0.6, 0.78, 0, 5.5, '#474d55');
-    saw(a, 0.08, 0.12, 0.92, 0.78, 15, 3, roof); stack(a, 0.2, 0.26, 0.04, ri(r, 34, 44), pk(r, ['#a05a48', '#8b8f94']), '#e8e4dc', 0);
+    saw(a, 0.08, 0.12, 0.92, 0.78, 15, 3, roof); a.box(0.14, 0.2, 0.26, 0.32, 15, 24, sh(wall, 0.9)); stack(a, 0.2, 0.26, 0.04, ri(r, 38, 48), pk(r, ['#a05a48', '#8b8f94']), '#e8e4dc', 0, 24);
     crates(a, r, 0.1, 0.84, 3); a.cyl(0.8, 0.88, 0.05, 0, 7, pk(r, BOLD)); a.light(0.5, 0.82, 9, 'lamp', 0.8);
   }
   function I2c(a, r, w, v) { // grain silos with a conveyor
@@ -502,7 +502,7 @@
       else { a.face('A', u0 + 0.08, u1 - 0.08, 0.76, 0, 8, '#474d55'); if (k) a.win('B', 0.2, 0.7, u1, 5, 9.5, 3, 1); }
       a.gable(u0, 0.14, u1, 0.76, 11, 7, roof, wall, 'v'); if (green) for (let q = 1; q < 5; q++) a.seg([u0 + 0.2, 0.14 + q * 0.124, 18], [u1, 0.14 + q * 0.124, 11], 'rgba(255,255,255,0.5)', 0.6);
     }
-    if (green) { for (let k = 0; k < 4; k++) a.gq(0.12 + k * 0.2, 0.82, 0.28 + k * 0.2, 0.94, k % 2 ? '#5fae5f' : '#7a5a3a'); a.light(0.5, 0.5, 8, 'lamp', 1.3); } else { crates(a, r, 0.12, 0.84, 4); a.cyl(0.84, 0.88, 0.05, 0, 7, pk(r, BOLD)); stack(a, 0.2, 0.26, 0.03, 26, '#6b6f75', null, 0); a.light(0.5, 0.82, 9, 'lamp', 0.8); }
+    if (green) { for (let k = 0; k < 4; k++) a.gq(0.12 + k * 0.2, 0.82, 0.28 + k * 0.2, 0.94, k % 2 ? '#5fae5f' : '#7a5a3a'); a.light(0.5, 0.5, 8, 'lamp', 1.3); } else { crates(a, r, 0.12, 0.84, 4); a.cyl(0.84, 0.88, 0.05, 0, 7, pk(r, BOLD)); stack(a, 0.2, 0.26, 0.03, 28, '#6b6f75', null, 0, 14); a.light(0.5, 0.82, 9, 'lamp', 0.8); }
   }
   function I3b(a, r, w, v) { // container terminal
     a.lot('#77756e'); const wall = pk(r, METAL), ac = pk(r, BOLD);
@@ -532,9 +532,8 @@
   function I3e(a, r, w, v) { // food factory with silos
     a.lot('#7f7d76'); const wall = pk(r, BRICK.concat(['#e6dccb', '#d9d2c4'])), sc = pk(r, ['#c9cdd1', '#e8e6e0', '#d8d2c0']), sh2 = ri(r, 48, 62);
     for (let k = 0; k < 4; k++) silo(a, 0.26 + (k % 2) * 0.3, 0.26 + ((k / 2) | 0) * 0.3, 0.14, sh2 - (k > 1 ? 6 : 0), sc); a.seg([0.26, 0.26, sh2 + 6], [0.56, 0.26, sh2 + 6], '#6b7077', 1.6);
-    stack(a, 1.74, 0.3, 0.07, ri(r, 74, 92), pk(r, ['#a05a48', '#8b8f94']), '#e8e4dc', 0);
-    a.box(0.7, 0.3, 1.86, 1.3, 0, 24, wall); a.win('A', 0.74, 1.82, 1.3, 12, 20, 6, 1, { glass: '#7fa9c2' }); a.win('B', 0.36, 1.24, 1.86, 12, 20, 5, 1, { glass: '#7fa9c2' }); a.face('A', 0.9, 1.2, 1.3, 0, 10, '#474d55'); a.face('A', 1.4, 1.7, 1.3, 0, 10, '#474d55');
-    a.box(0.7, 0.3, 1.86, 1.3, 24, 25.5, '#7c838a'); roofKit(a, r, 0.8, 0.4, 1.7, 1.2, 25.5, 4); a.seg([0.56, 0.56, 30], [0.8, 0.7, 25], '#7a7f85', 2.4);
+        a.box(0.7, 0.3, 1.86, 1.3, 0, 24, wall); a.win('A', 0.74, 1.82, 1.3, 12, 20, 6, 1, { glass: '#7fa9c2' }); a.win('B', 0.36, 1.24, 1.86, 12, 20, 5, 1, { glass: '#7fa9c2' }); a.face('A', 0.9, 1.2, 1.3, 0, 10, '#474d55'); a.face('A', 1.4, 1.7, 1.3, 0, 10, '#474d55');
+    a.box(0.7, 0.3, 1.86, 1.3, 24, 25.5, '#7c838a'); roofKit(a, r, 0.8, 0.6, 1.5, 1.2, 25.5, 3); a.box(1.6, 0.36, 1.82, 0.58, 25.5, 30, sh(wall, 0.9)); stack(a, 1.71, 0.47, 0.07, ri(r, 74, 92), pk(r, ['#a05a48', '#8b8f94']), '#e8e4dc', 0, 30); a.seg([0.56, 0.56, 30], [0.8, 0.7, 25], '#7a7f85', 2.4);
     a.box(0.14, 0.9, 0.62, 1.4, 0, 14, sh(wall, 0.94)); a.win('A', 0.18, 0.58, 1.4, 4, 11, 3, 1); a.box(0.14, 0.9, 0.62, 1.4, 14, 15.2, '#7c838a');
     truck(a, 0.3, 1.74, '#c9cdd1', true); truck(a, 1.1, 1.8, pk(r, BOLD), true); crates(a, r, 1.6, 1.5, 4); a.light(1.0, 1.4, 12, 'lamp', 1.1);
   }
