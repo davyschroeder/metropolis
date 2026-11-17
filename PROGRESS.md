@@ -181,3 +181,8 @@ element, dragging over the highlighted area) – passes at 1366×768 and 390×84
 - **Sprite memory**: sprites carry a last-used stamp (`sp.u`); `S.trim()` (every 150 frames) evicts unseen sprites once the cache exceeds 170/110/60 MB (high/medium/low). Generation is spread over frames (`S.GEN_BUDGET` 6 ms): past the budget a building briefly shows an already-drawn neighbour of the same level.
 - **Vehicles turn through bends**: `S.vehicleH(type, h, col)` draws oriented boxes for 16 headings; `place()` sets `c.h/c.hx/c.hy` from the Bezier tangent, so sprite, headlights and tail lights follow the curve. The bend's control point is the exact meeting point of entry and exit lane. Cars brake gently *before* a bend (`g.nturn`) instead of in it; braking for traffic is still hard.
 - Test: the fire test accepts more than one extinguished fire (a fire may spread before the engine arrives).
+
+## 0.10.1 — lighter evenings, livelier windows
+- Night tint is one constant, `S.NIGHT = [98,114,184]` (was 58,78,160), used by the night sprites, the ground layer and occluder tiles; the blue night grade is softer.
+- `litOf(sp)` in `sprites.js` decides the lit windows per building design: lit share 20–70 %, mixed colours (`S.WINCOL`), some buildings cool-white or single-coloured, varying brightness. `sp.sd` is the design seed.
+- A few dark windows per building (`S.twinkle(sp)`, 6–12 depending on size) switch on and off at runtime with a short fade (in `drawBuildingPart`, only above zoom 0.5).

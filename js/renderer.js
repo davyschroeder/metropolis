@@ -241,6 +241,20 @@
       }
       g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
     }
+    // a few windows per building switch on and off through the evening
+    if (nf > 0.25 && lit && sp.wins.length && Cam.zoom > 0.5) {
+      const tw = S.twinkle(sp), nt = tw.length;
+      if (nt) {
+        const la = Math.min(1, (nf - 0.25) * 1.6), n = Math.min(nt, 3 + b.s * 3), ga = g.globalAlpha, T0 = Rn.time, WC = S.WINCOL;
+        for (let q = 0; q < n; q++) {
+          const per = 6 + ((b.id * 13 + q * 7) % 11), tt = (T0 + b.id * 2.37 + q * 1.31) / per, fl = Math.floor(tt), cur = M.hash(b.id, q, fl) < 0.5 ? 1 : 0, prev = M.hash(b.id, q, fl - 1) < 0.5 ? 1 : 0;
+          const al = prev + (cur - prev) * Math.min(1, (tt - fl) * per / 0.8); if (al < 0.02) continue;
+          const p = sp.wins[tw[(b.id * 5 + q * 3) % nt]]; g.globalAlpha = ga * la * al * 0.92; g.fillStyle = WC[(b.id + q * 3) % 5];
+          g.beginPath(); g.moveTo(bx + p[0][0], by + p[0][1]); g.lineTo(bx + p[1][0], by + p[1][1]); g.lineTo(bx + p[2][0], by + p[2][1]); g.lineTo(bx + p[3][0], by + p[3][1]); g.closePath(); g.fill();
+        }
+        g.globalAlpha = ga;
+      }
+    }
     if (sp.anim) {
       const an = sp.anim, x = bx + an.x, y = by + an.y;
       if (an.t === 'rotor') {
@@ -299,7 +313,7 @@
     const W = M.world, city = M.city; if (!W || !cv) return;
     Rn.frame++; Rn.time += dt; const tA = performance.now(); S.blendBudget = 14; S.genMs = 0; S.tick = Rn.frame; if (Rn.frame % 150 === 0) S.trim();
     const n = W.n, z = Cam.zoom, cw2 = Cam.w, ch2 = Cam.h, T = M.Traffic;
-    const nf = M.settings.daynight ? nightFactor(city.tod) : 0, dark = nf * 0.6, nightMul = 'rgb(' + Math.round(255 - nf * 197) + ',' + Math.round(255 - nf * 177) + ',' + Math.round(255 - nf * 95) + ')'; Rn.night = nf; if ((nf < 0.02 || nf > 0.98) && Rn.frame % 60 === 0) S.dropBlends();
+    const nf = M.settings.daynight ? nightFactor(city.tod) : 0, dark = nf * 0.6, NT = S.NIGHT, nightMul = 'rgb(' + Math.round(255 - nf * (255 - NT[0])) + ',' + Math.round(255 - nf * (255 - NT[1])) + ',' + Math.round(255 - nf * (255 - NT[2])) + ')'; Rn.night = nf; if ((nf < 0.02 || nf > 0.98) && Rn.frame % 60 === 0) S.dropBlends();
     let shx = 0, shy = 0; if (Cam.shake > 0) { shx = (M.rand() - 0.5) * 10 * Cam.shake; shy = (M.rand() - 0.5) * 8 * Cam.shake; }
     // snap the camera to whole device pixels so the cached ground can be scrolled without blurring
     const zd = z * dpr, camX = Math.round(Cam.x * zd) / zd, camY = Math.round(Cam.y * zd) / zd;
@@ -331,7 +345,7 @@
         c.fillStyle = 'rgba(8,14,24,0.34)'; c.beginPath(); rp(0, 0, n, L.y0); rp(0, L.y1 + 1, n, n); rp(0, L.y0, L.x0, L.y1 + 1); rp(L.x1 + 1, L.y0, n, L.y1 + 1); c.fill();
         c.beginPath(); rp(L.x0, L.y0, L.x1 + 1, L.y1 + 1); c.strokeStyle = 'rgba(255,255,255,0.55)'; c.lineWidth = 1.5 / z; c.setLineDash([8 / z, 6 / z]); c.stroke(); c.setLineDash([]);
       }
-      if (nStep > 0) { const q = nStep / 24; c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'multiply'; c.fillStyle = 'rgb(' + Math.round(255 - q * 197) + ',' + Math.round(255 - q * 177) + ',' + Math.round(255 - q * 95) + ')'; c.fillRect(0, 0, cv.width, cv.height); c.globalCompositeOperation = 'source-over'; }
+      if (nStep > 0) { const q = nStep / 24; c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'multiply'; c.fillStyle = 'rgb(' + Math.round(255 - q * (255 - NT[0])) + ',' + Math.round(255 - q * (255 - NT[1])) + ',' + Math.round(255 - q * (255 - NT[2])) + ')'; c.fillRect(0, 0, cv.width, cv.height); c.globalCompositeOperation = 'source-over'; }
       c.restore(); return complete;
     };
     const shaking = Cam.shake > 0, same = gValid && gk === gKey && !shaking;
@@ -502,7 +516,7 @@
     if (M.settings.daynight) {
       const tod = city.tod, warm = Math.max(0, 1 - Math.abs(tod - 0.715) / 0.075, 0.8 * (1 - Math.abs(tod - 0.27) / 0.06)), blue = Math.max(0, 1 - Math.abs(tod - 0.8) / 0.06, 0.6 * (1 - Math.abs(tod - 0.21) / 0.05));
       if (warm > 0.01) { g.globalCompositeOperation = 'soft-light'; g.fillStyle = 'rgba(255,136,52,' + (warm * 0.55).toFixed(3) + ')'; g.fillRect(0, 0, cw2, ch2); g.globalCompositeOperation = 'source-over'; g.fillStyle = 'rgba(255,150,80,' + (warm * 0.06).toFixed(3) + ')'; g.fillRect(0, 0, cw2, ch2); }
-      if (nf > 0.3) { g.globalCompositeOperation = 'soft-light'; g.fillStyle = 'rgba(20,34,120,' + ((nf - 0.3) * 0.5).toFixed(3) + ')'; g.fillRect(0, 0, cw2, ch2); g.globalCompositeOperation = 'source-over'; }
+      if (nf > 0.3) { g.globalCompositeOperation = 'soft-light'; g.fillStyle = 'rgba(34,52,140,' + ((nf - 0.3) * 0.36).toFixed(3) + ')'; g.fillRect(0, 0, cw2, ch2); g.globalCompositeOperation = 'source-over'; }
       if (blue > 0.01) { g.globalCompositeOperation = 'soft-light'; g.fillStyle = 'rgba(96,88,220,' + (blue * 0.5).toFixed(3) + ')'; g.fillRect(0, 0, cw2, ch2); g.globalCompositeOperation = 'source-over'; }
     }
     if (fx) {

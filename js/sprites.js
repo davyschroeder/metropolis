@@ -373,31 +373,47 @@
   const ZD = [null, [null, R1, R2, R3, R4, R5], [null, C1, C2, C3, C4, C5], [null, I1, I2, I3, I4, I5]];
 
   // ---------- night / abandoned variants ----------
-  function nightOf(sp, lit) {
-    const c = mk(sp.c.width, sp.c.height), g = c.getContext('2d'); g.drawImage(sp.c, 0, 0);
-    g.globalCompositeOperation = 'multiply'; g.fillStyle = 'rgb(58,78,160)'; g.fillRect(0, 0, c.width, c.height); g.globalCompositeOperation = 'destination-in'; g.drawImage(sp.c, 0, 0); g.globalCompositeOperation = 'source-over';
-    g.setTransform(sp.r, 0, 0, sp.r, 0, 0);
-    if (lit && sp.wins) {
-      for (let i = 0; i < sp.wins.length; i++) {
-        const h = M.hash(i, sp.wins.length, 77); if (h > 0.55) continue; const p = sp.wins[i];
-        g.fillStyle = h < 0.08 ? '#bfe0ff' : h < 0.3 ? '#ffe39a' : h < 0.45 ? '#ffc65a' : '#ffa94a';
-        g.beginPath(); g.moveTo(p[0][0], p[0][1]); g.lineTo(p[1][0], p[1][1]); g.lineTo(p[2][0], p[2][1]); g.lineTo(p[3][0], p[3][1]); g.closePath(); g.fill();
-      }
+  // night tint (multiplied over the day sprite and the ground) and the colours of lit windows
+  S.NIGHT = [98, 114, 184];
+  const WINCOL = ['#ffe39a', '#ffd27a', '#ffc65a', '#ffa94a', '#fff1cf', '#bfe0ff', '#8fc2ff', '#ffb98a'];
+  S.WINCOL = WINCOL;
+  // which windows are lit differs per building design: some are almost dark, some fully lit, in mixed colours and
+  // brightness. sp.lw[i] = 0 (dark) or colour index + 1; sp.tw = dark windows that may switch on and off at runtime.
+  function litOf(sp) {
+    if (sp.lw) return sp.lw; const n = sp.wins.length, sd = sp.sd || (n * 131 + sp.w * 7 + (sp.top | 0)), lw = sp.lw = new Uint8Array(n), tw = sp.tw = [];
+    const frac = 0.2 + M.hash(sd, 3, 51) * 0.5, cool = M.hash(sd, 5, 52) < 0.18, mono = M.hash(sd, 7, 53) < 0.3 ? 1 + ((M.hash(sd, 9, 54) * 4) | 0) : 0;
+    for (let i = 0; i < n; i++) {
+      const h = M.hash(i, sd, 77);
+      if (h > frac) { if (tw.length < 24 && M.hash(i, sd, 78) < Math.max(0.12, 14 / n)) tw.push(i); continue; }
+      const c = M.hash(i, sd, 79); lw[i] = mono && c < 0.7 ? mono : cool ? (c < 0.6 ? 6 : c < 0.8 ? 5 : 7) : (c < 0.3 ? 1 : c < 0.52 ? 2 : c < 0.7 ? 3 : c < 0.8 ? 4 : c < 0.88 ? 5 : c < 0.93 ? 6 : c < 0.97 ? 7 : 8);
     }
-    if (lit && sp.wins && sp.wins.length && M.settings.quality !== 'low') { // bake a soft glow around lit windows into the night sprite
-      const bl = S.bloom(sp); if (bl) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.55; g.drawImage(bl, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; sp.bl = undefined; }
+    return lw;
+  }
+  S.twinkle = function (sp) { if (!sp.lw) litOf(sp); return sp.tw; };
+  function winPath(g, p) { g.beginPath(); g.moveTo(p[0][0], p[0][1]); g.lineTo(p[1][0], p[1][1]); g.lineTo(p[2][0], p[2][1]); g.lineTo(p[3][0], p[3][1]); g.closePath(); }
+  function nightOf(sp, lit) {
+    const c = mk(sp.c.width, sp.c.height), g = c.getContext('2d'), N = S.NIGHT; g.drawImage(sp.c, 0, 0);
+    g.globalCompositeOperation = 'multiply'; g.fillStyle = 'rgb(' + N[0] + ',' + N[1] + ',' + N[2] + ')'; g.fillRect(0, 0, c.width, c.height); g.globalCompositeOperation = 'destination-in'; g.drawImage(sp.c, 0, 0); g.globalCompositeOperation = 'source-over';
+    g.setTransform(sp.r, 0, 0, sp.r, 0, 0);
+    if (lit && sp.wins && sp.wins.length) {
+      const lw = litOf(sp), sd = sp.sd || 0;
+      for (let i = 0; i < sp.wins.length; i++) { if (!lw[i]) continue; g.globalAlpha = 0.55 + 0.45 * M.hash(i, sd, 80); g.fillStyle = WINCOL[lw[i] - 1]; winPath(g, sp.wins[i]); g.fill(); }
+      g.globalAlpha = 1;
+      if (M.settings.quality !== 'low') { // bake a soft glow around lit windows into the night sprite
+        const bl = S.bloom(sp); if (bl) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.55; g.drawImage(bl, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; sp.bl = undefined; }
+      }
     }
     return c;
   }
   // soft halo around lit windows, drawn additively over the night sprite (bloom)
   S.bloom = function (sp) {
     if (sp.bl !== undefined) return sp.bl; if (!sp.wins || !sp.wins.length) return (sp.bl = null);
-    const c = mk(sp.c.width, sp.c.height), g = c.getContext('2d'); g.setTransform(sp.r, 0, 0, sp.r, 0, 0);
-    g.shadowBlur = 7 * sp.r; g.shadowColor = 'rgba(255,170,70,0.95)';
+    const c = mk(sp.c.width, sp.c.height), g = c.getContext('2d'), lw = litOf(sp); g.setTransform(sp.r, 0, 0, sp.r, 0, 0);
+    g.shadowBlur = 7 * sp.r;
     for (let i = 0; i < sp.wins.length; i++) {
-      const h = M.hash(i, sp.wins.length, 77); if (h > 0.55) continue; const p = sp.wins[i];
-      g.fillStyle = h < 0.08 ? 'rgba(170,205,255,0.55)' : 'rgba(255,200,120,0.5)';
-      g.beginPath(); g.moveTo(p[0][0], p[0][1]); g.lineTo(p[1][0], p[1][1]); g.lineTo(p[2][0], p[2][1]); g.lineTo(p[3][0], p[3][1]); g.closePath(); g.fill();
+      if (!lw[i]) continue; const cold = lw[i] === 6 || lw[i] === 7;
+      g.shadowColor = cold ? 'rgba(120,170,255,0.95)' : 'rgba(255,170,70,0.95)'; g.fillStyle = cold ? 'rgba(170,205,255,0.55)' : 'rgba(255,200,120,0.5)';
+      winPath(g, sp.wins[i]); g.fill();
     }
     return (sp.bl = c);
   };
@@ -434,7 +450,7 @@
     const t0 = performance.now(), size = M.ZB[z].size[lvl], a = new Art(size, ZH[z][lvl]); a.flip = f;
     const forms = S.zforms[z][lvl], fi = v % forms.length;
     forms[fi](a, M.rng(z * 1000 + lvl * 100 + wealth * 10 + v * 131 + 7), wealth, (v / forms.length) | 0);
-    sp = a.done(); if (ab) abandon(sp); sp.u = S.tick; sp.key = key; S.cache.set(key, sp); if (!ab) fallback.set(fk, sp); S.genMs += performance.now() - t0; return sp;
+    sp = a.done(); if (ab) abandon(sp); sp.u = S.tick; sp.key = key; sp.sd = z * 100000 + lvl * 10000 + wealth * 1000 + v * 2 + f; S.cache.set(key, sp); if (!ab) fallback.set(fk, sp); S.genMs += performance.now() - t0; return sp;
   };
   S.variant = function (b) { return ((b.v | 0) + ((M.hash(b.x, b.y, 31) * S.NV) | 0)) % S.NV; };
   S.of = function (b) {
