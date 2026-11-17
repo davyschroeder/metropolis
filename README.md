@@ -55,6 +55,7 @@ js/construction.js  tools, placement rules, costs, demolition, upgrades, undo
 js/camera.js        pan, zoom, picking
 js/sprites.js       procedural art toolkit, zoned buildings, vehicles, trees, road tiles
 js/sprites2.js      procedural art for placeable buildings
+js/sprites3.js      extra forms for zoned buildings (80 looks per zone level)
 js/renderer.js      chunked terrain, depth-sorted objects, lighting, weather, overlays, minimap
 js/engine.js        fixed-tick simulation clock and main loop
 js/save.js          IndexedDB save slots, autosave, settings

@@ -28,7 +28,7 @@
     const dem = city.demand[KEY[z]]; if (dem < 0.08 || M.rand() > 0.2 + dem * 0.5) return false;
     if (W.findRoad(x, y, 1, 2) < 0 || W.power[i] !== 1) return false;
     if (G.des(W, city, z, i) < M.ZB[z].des[1]) return false;
-    W.addBuilding({ t: KEY[z], z: z, x: x, y: y, s: 1, lvl: 1, cap: G.capOf(z, 1), v: (M.rand() * 4) | 0, f: facing(W, x, y, 1), built: 0.02, rate: 1 / 20, wealth: W.lv[i] < 38 ? 1 : W.lv[i] < 62 ? 2 : 3 });
+    W.addBuilding({ t: KEY[z], z: z, x: x, y: y, s: 1, lvl: 1, cap: G.capOf(z, 1), v: (M.rand() * 80) | 0, f: facing(W, x, y, 1), built: 0.02, rate: 1 / 20, wealth: W.lv[i] < 38 ? 1 : W.lv[i] < 62 ? 2 : 3 });
     return true;
   };
 
@@ -66,12 +66,12 @@
         let pop = 0, filled = 0;
         for (let yy = c[1]; yy < c[1] + 2; yy++) for (let xx = c[0]; xx < c[0] + 2; xx++) { const o = W.at(xx, yy); if (o) { pop += o.pop; filled += o.filled; W.removeBuilding(o); } }
         const cap = G.capOf(z, nl);
-        W.addBuilding({ t: KEY[z], z: z, x: c[0], y: c[1], s: 2, lvl: nl, cap: cap, pop: Math.min(cap, pop), filled: Math.min(cap, filled), v: (M.rand() * 4) | 0, f: facing(W, c[0], c[1], 2), built: 0.02, rate: 1 / (20 + nl * 6), reno: true, on: true, pw: true, wt: true, wealth: wealth, happy: b.happy, commute: b.commute });
+        W.addBuilding({ t: KEY[z], z: z, x: c[0], y: c[1], s: 2, lvl: nl, cap: cap, pop: Math.min(cap, pop), filled: Math.min(cap, filled), v: (M.rand() * 80) | 0, f: facing(W, c[0], c[1], 2), built: 0.02, rate: 1 / (20 + nl * 6), reno: true, on: true, pw: true, wt: true, wealth: wealth, happy: b.happy, commute: b.commute });
         return true;
       }
       return false;
     }
-    b.lvl = nl; b.cap = G.capOf(z, nl); b.v = (M.rand() * 4) | 0; b.built = 0.02; b.rate = 1 / (18 + nl * 6); b.reno = true; b.age = 0; b.wealth = wealth;
+    b.lvl = nl; b.cap = G.capOf(z, nl); b.v = (M.rand() * 80) | 0; b.built = 0.02; b.rate = 1 / (18 + nl * 6); b.reno = true; b.age = 0; b.wealth = wealth;
     W.bldVer++; M.emit('bld', b, true);
     return true;
   };

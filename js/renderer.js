@@ -297,7 +297,7 @@
   // ---------------- frame ----------------
   Rn.draw = function (dt, adt) {
     const W = M.world, city = M.city; if (!W || !cv) return;
-    Rn.frame++; Rn.time += dt; const tA = performance.now(); S.blendBudget = 14;
+    Rn.frame++; Rn.time += dt; const tA = performance.now(); S.blendBudget = 14; S.genMs = 0; S.tick = Rn.frame; if (Rn.frame % 150 === 0) S.trim();
     const n = W.n, z = Cam.zoom, cw2 = Cam.w, ch2 = Cam.h, T = M.Traffic;
     const nf = M.settings.daynight ? nightFactor(city.tod) : 0, dark = nf * 0.6, nightMul = 'rgb(' + Math.round(255 - nf * 197) + ',' + Math.round(255 - nf * 177) + ',' + Math.round(255 - nf * 95) + ')'; Rn.night = nf; if ((nf < 0.02 || nf > 0.98) && Rn.frame % 60 === 0) S.dropBlends();
     let shx = 0, shy = 0; if (Cam.shake > 0) { shx = (M.rand() - 0.5) * 10 * Cam.shake; shy = (M.rand() - 0.5) * 8 * Cam.shake; }
@@ -418,7 +418,7 @@
       const cars = T.cars;
       for (let q = 0; q < cars.length; q++) {
         const c = cars[q], wx = (c.x - c.y) * TW, wy = (c.x + c.y) * TH - c.e * EL; if (wx < vx0 - 40 || wx > vx1 + 40 || wy < vy0 - 40 || wy > vy1 + 40) continue;
-        const sp = S.vehicle(c.type, c.d, c.type === 'car' ? c.col : c.col % 3), it = item(c.x + c.y + 0.02, 6); it.w = sp.w; it.h = sp.h; it.a = c.a;
+        const sp = S.vehicleH(c.type, c.h, c.type === 'car' ? c.col : c.col % 3), it = item(c.x + c.y + 0.02, 6); it.w = sp.w; it.h = sp.h; it.a = c.a;
         it.c = nf > 0.6 ? S.night(sp, false) : sp.c; it.x = wx - sp.ox; it.y = wy - sp.oy - TH; it.wx = wx; it.wy = wy; it.d = c.d; it.car = c;
       }
       if (z > 0.6) { const peds = T.peds; for (let q = 0; q < peds.length; q++) { const p = peds[q], wx = (p.x - p.y) * TW, wy = (p.x + p.y) * TH - p.e * EL; if (wx < vx0 || wx > vx1 || wy < vy0 || wy > vy1) continue; const it = item(p.x + p.y + 0.01, 4); it.x = wx; it.y = wy; it.col = p.col; it.ph = p.ph; } }
@@ -449,7 +449,7 @@
           const ga = g.globalAlpha; if (it.a < 1) g.globalAlpha = ga * Math.max(0, it.a); g.drawImage(it.c, it.x, it.y, it.w, it.h); g.globalAlpha = ga;
           if (it.a < 0.6) break;
           if (nf > 0.3) { // headlight beams in front, red tail lights behind
-            const d = it.d, dx = d === 1 || d === 0 ? 0.894 : -0.894, dy = d === 1 || d === 2 ? 0.447 : -0.447, la = Math.min(1, (nf - 0.3) * 1.8) * Math.min(1, it.a), fx = it.wx + dx * 6, fy = it.wy + dy * 6 - 3;
+            const cc = it.car, qx = (cc.hx - cc.hy) * 2, qy = cc.hx + cc.hy, qm = Math.hypot(qx, qy) || 1, dx = qx / qm, dy = qy / qm, la = Math.min(1, (nf - 0.3) * 1.8) * Math.min(1, it.a), fx = it.wx + dx * 6, fy = it.wy + dy * 6 - 3;
             g.globalCompositeOperation = 'lighter'; g.save(); g.translate(fx, fy); g.rotate(Math.atan2(dy, dx)); g.globalAlpha = la * 0.7; g.drawImage(beamOf(), 0, -8, 30, 16); g.restore();
             g.globalAlpha = la; g.drawImage(glowOf('head'), fx - 4, fy - 4, 8, 8); g.drawImage(glowOf('tail'), it.wx - dx * 7 - 3, it.wy - dy * 7 - 6, 6, 6); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
           }

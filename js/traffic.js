@@ -97,7 +97,7 @@
   let laneMap = new Map(), occ = new Map(), n = 0, Wd = null;
   function newCar(path, type) {
     const c = T.free.pop() || {};
-    c.p = path; c.k = 0; c.t = 0; c.v = 0; c.type = type; c.col = (M.rand() * CAR_COLS) | 0; c.x = 0; c.y = 0; c.e = 1; c.d = 0; c.ax = 1;
+    c.p = path; c.k = 0; c.t = 0; c.v = 0; c.type = type; c.col = (M.rand() * CAR_COLS) | 0; c.x = 0; c.y = 0; c.e = 1; c.d = 0; c.ax = 1; c.h = 0; c.hx = 1; c.hy = 0;
     c.cb = null; c.cb2 = null; c.wait = 0; c.loop = false; c.ret = false; c.dead = false; c.g = null; c.gk = -1; c.a = 0; c.out = false;
     c.blocked = 0; c.ghost = 0; c.stops = null; c.emerg = type === 'fire'; c.len = LEN[type] || 0.27;
     return c;
@@ -117,10 +117,11 @@
     if (dIn >= 0) { g.x0 = x - dx[dIn] * 0.5 - dy[dIn] * Lin; g.y0 = y - dy[dIn] * 0.5 + dx[dIn] * Lin; } else { g.x0 = x - dy[eout] * Lc; g.y0 = y + dx[eout] * Lc; }
     if (dOut >= 0) { g.x2 = x + dx[dOut] * 0.5 - dy[dOut] * Lout; g.y2 = y + dy[dOut] * 0.5 + dx[dOut] * Lout; } else { g.x2 = x - dy[ein] * Lc; g.y2 = y + dx[ein] * Lc; }
     g.turn = dIn >= 0 && dOut >= 0 && dIn !== dOut;
-    if (g.turn) { g.x1 = x - dy[dIn] * Lc - dy[dOut] * Lc; g.y1 = y + dx[dIn] * Lc + dx[dOut] * Lc; } else { g.x1 = (g.x0 + g.x2) / 2; g.y1 = (g.y0 + g.y2) / 2; }
+    if (g.turn) { g.x1 = x - dy[dIn] * Lin - dy[dOut] * Lout; g.y1 = y + dx[dIn] * Lin + dx[dOut] * Lout; } /* where the entry lane meets the exit lane */ else { g.x1 = (g.x0 + g.x2) / 2; g.y1 = (g.y0 + g.y2) / 2; }
     g.len = Math.max(0.15, (Math.hypot(g.x1 - g.x0, g.y1 - g.y0) + Math.hypot(g.x2 - g.x1, g.y2 - g.y1)) * (g.turn ? 0.92 : 1));
     const ec = W.eh(i); g.e0 = k > 0 ? (W.eh(p[k - 1]) + ec) / 2 : ec; g.e1 = ec; g.e2 = k < L - 1 ? (W.eh(p[k + 1]) + ec) / 2 : ec;
     g.key = i * 4 + ein; g.nkey = dOut >= 0 ? p[k + 1] * 4 + dOut : -1; g.dOut = dOut; g.dIn = ein;
+    g.nturn = k < L - 2 && dOut >= 0 && dirOf(p[k + 1], p[k + 2]) !== dOut; // a bend is coming: brake before it, not in it
     g.sig = dOut >= 0 && M.Roads.signal(W, p[k + 1]); g.junc = dOut >= 0 && M.Roads.driveCount(W, p[k + 1]) >= 3;
     const rt = M.ROADS[W.road[i]] || M.ROADS[2], r = rt.cap ? W.traffic[i] / rt.cap : 0;
     g.vmax = rt.speed * BASE * M.roadCond / (1 + Math.min(1.5, r * r * 0.5)) * (g.turn ? 0.55 : 1) * (c.type === 'car' || c.type === 'police' ? 1 : 0.82);
@@ -132,6 +133,7 @@
     c.x = a * g.x0 + b * g.x1 + d * g.x2; c.y = a * g.y0 + b * g.y1 + d * g.y2; c.e = a * g.e0 + b * g.e1 + d * g.e2;
     const tx = u * (g.x1 - g.x0) + t * (g.x2 - g.x1), ty = u * (g.y1 - g.y0) + t * (g.y2 - g.y1);
     c.ax = Math.abs(tx) >= Math.abs(ty) ? 1 : 0; c.d = c.ax ? (tx > 0 ? 1 : 3) : (ty > 0 ? 2 : 0);
+    const m = Math.hypot(tx, ty) || 1; c.hx = tx / m; c.hy = ty / m; c.h = Math.round(Math.atan2(ty, tx) / (Math.PI / 8)) & 15; // heading for the sprite and the lights
   }
   function indexCars(cars) {
     laneMap.clear(); occ.clear();
@@ -165,8 +167,9 @@
     // bus stops
     if (c.stops && c.stops.has(c.k) && c.t >= 0.5 && c.t - c.v * dt / g.len < 0.5 && !c.dwelt) { c.dwelt = true; c.wait = 1.6; c.t = 0.5; place(c); return true; }
     let gap = c.ghost > 0 ? 9 : clearance(W, c); if (c.ghost > 0) c.ghost -= dt;
-    const vt = Math.min(g.vmax, Math.max(0, (gap - 0.06) * 2.6));
-    c.v = vt < c.v ? Math.max(vt, c.v - 5 * dt) : Math.min(vt, c.v + 1.1 * dt);
+    let vm = g.vmax; if (g.nturn && !g.turn && !c.emerg) { const vb = g.vmax * 0.58; vm = Math.min(vm, vb + (vm - vb) * Math.min(1, (1 - c.t) * 1.5)); }
+    const vg = Math.max(0, (gap - 0.06) * 2.6), vt = Math.min(vm, vg);
+    c.v = vt < c.v ? Math.max(vt, c.v - (vg < c.v ? 5 : 2.4) * dt) : Math.min(vt, c.v + 1.1 * dt); // brake hard for traffic, gently for a bend
     if (c.v < 0.02 && vt < 0.05) { c.blocked += dt; if (c.blocked > 7) { c.ghost = 1.6; c.blocked = 0; c.stuck = (c.stuck || 0) + 1; if (c.stuck > 3 && !c.loop && !c.ret && !c.cb2) { c.out = true; laneRemove(c); return true; } } } else c.blocked = 0;
     c.t += c.v * dt / g.len;
     while (c.t >= 1) {

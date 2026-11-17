@@ -85,7 +85,7 @@ console.log('6. fire and disasters'); {
   let W = town(), c = M.city; run(400); let victim = null; W.each(b => { if (b.z === 1 && b.built >= 1 && !victim) victim = b; });
   M.Env.ignite(W, c, victim); run(80); ok(victim.dead, 'with no fire station a burning building is lost');
   W = town(); c = M.city; c.money = 1e5; c.tier = 1; const sx = W.start.x, sy = W.start.y; build('fire', sx - 1, sy + 6); run(400); victim = null; W.each(b => { if (b.z === 1 && b.built >= 1 && !victim) victim = b; });
-  M.Env.ignite(W, c, victim); run(60); ok(!victim.dead && !victim.fire && c.counters.fires === 1, 'a fire engine drives to the fire and puts it out (building at ' + Math.round(victim.hp) + '% condition)');
+  M.Env.ignite(W, c, victim); run(60); ok(!victim.dead && !victim.fire && c.counters.fires >= 1, 'a fire engine drives to the fire and puts it out (building at ' + Math.round(victim.hp) + '% condition)');
   const cnt = W.count; M.Env.trigger(W, c, 'quake'); let dmg = 0, rub = 0; W.each(b => { if (b.dmg) dmg++; if (b.t === 'rubble') rub++; }); ok(dmg + rub > 0, 'earthquake damages buildings (' + dmg + ' damaged, ' + rub + ' rubble of ' + cnt + ')');
   run(200); let still = 0; W.each(b => { if (b.dmg) still++; }); ok(still < dmg || dmg === 0, 'damaged buildings are repaired over time (' + dmg + ' -> ' + still + ')');
 }

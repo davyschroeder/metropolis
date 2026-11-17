@@ -421,15 +421,34 @@
     sp.wins = []; sp.smoke = [];
   }
   // ---------- sprite lookups ----------
+  // Each zone level has several building forms (S.zforms, extended in sprites3.js); a variant picks a form and
+  // a style seed, so a level has NV distinct looks instead of 4.
+  S.NV = 80; S.tick = 0; S.genMs = 0; S.GEN_BUDGET = 6; const fallback = new Map();
+  S.zforms = [null]; for (let z = 1; z <= 3; z++) { S.zforms[z] = [null]; for (let l = 1; l <= 5; l++) S.zforms[z][l] = [ZD[z][l]]; }
+  S.ZH = ZH;
   S.zoned = function (z, lvl, wealth, v, f, ab) {
-    const key = 'z' + z + lvl + wealth + v + f + (ab ? 'x' : ''); let sp = S.cache.get(key); if (sp) return sp;
-    const size = M.ZB[z].size[lvl], a = new Art(size, ZH[z][lvl]); a.flip = f;
-    ZD[z][lvl](a, M.rng(z * 1000 + lvl * 100 + wealth * 10 + v + 7), wealth, v);
-    sp = a.done(); if (ab) abandon(sp); S.cache.set(key, sp); return sp;
+    const key = 'z' + z + lvl + wealth + '.' + v + '.' + f + (ab ? 'x' : ''); let sp = S.cache.get(key); if (sp) { sp.u = S.tick; return sp; }
+    // drawing a sprite costs a few ms: when many new ones scroll into view at once, spread the work over frames
+    // and show a ready-made neighbour of the same kind in the meantime
+    const fk = z * 100 + lvl * 10 + f; if (S.genMs > S.GEN_BUDGET) { const fb = fallback.get(fk); if (fb && S.cache.get(fb.key) === fb) { fb.u = S.tick; return fb; } }
+    const t0 = performance.now(), size = M.ZB[z].size[lvl], a = new Art(size, ZH[z][lvl]); a.flip = f;
+    const forms = S.zforms[z][lvl], fi = v % forms.length;
+    forms[fi](a, M.rng(z * 1000 + lvl * 100 + wealth * 10 + v * 131 + 7), wealth, (v / forms.length) | 0);
+    sp = a.done(); if (ab) abandon(sp); sp.u = S.tick; sp.key = key; S.cache.set(key, sp); if (!ab) fallback.set(fk, sp); S.genMs += performance.now() - t0; return sp;
   };
+  S.variant = function (b) { return ((b.v | 0) + ((M.hash(b.x, b.y, 31) * S.NV) | 0)) % S.NV; };
   S.of = function (b) {
-    if (b.z) return S.zoned(b.z, b.lvl, b.z === 1 ? b.wealth : 1, b.v & 3, b.f, b.ab ? 1 : 0);
-    return S.def(b.t, b.f, b.v);
+    if (b.z) return S.zoned(b.z, b.lvl, b.z === 1 ? b.wealth : 1, S.variant(b), b.f, b.ab ? 1 : 0);
+    const sp = S.def(b.t, b.f, b.v); if (sp) sp.u = S.tick; return sp;
+  };
+  // keep sprite memory bounded: drop sprites that have not been on screen for a while once the budget is exceeded
+  S.bytes = function (sp) { let n = sp.c.width * sp.c.height * 4; return n * (1 + (sp.n ? 1 : 0) + (sp.nd ? 1 : 0) + (sp.bL ? 1 : 0) + (sp.bD ? 1 : 0)); };
+  S.trim = function () {
+    const budget = (M.settings && M.settings.quality === 'low' ? 60 : M.settings && M.settings.quality === 'medium' ? 110 : 170) * 1048576;
+    let tot = 0; const old = []; S.cache.forEach(function (sp, k) { tot += S.bytes(sp); if (sp.u !== undefined && S.tick - sp.u > 240) old.push([sp.u, k, sp]); });
+    S.memMB = Math.round(tot / 1048576); if (tot <= budget) return;
+    old.sort(function (p, q) { return p[0] - q[0]; });
+    for (let i = 0; i < old.length && tot > budget * 0.7; i++) { tot -= S.bytes(old[i][2]); S.cache.delete(old[i][1]); }
   };
   S.def = function (id, f, v) {
     const d = S.designs[id]; if (!d) return null; const vv = d.variants ? (v || 0) % d.variants : 0, key = 'd' + id + (f ? 1 : 0) + vv; let sp = S.cache.get(key); if (sp) return sp;
@@ -471,18 +490,27 @@
   };
   // vehicles: type, axis (1 = along u/x, 0 = along v/y), colour index
   // d: driving direction 0 N, 1 E, 2 S, 3 W — the front (cab, bonnet, windscreen) always points that way
-  S.vehicle = function (type, d, col) {
-    const axisU = d === 1 || d === 3, sg = d === 1 || d === 2 ? 1 : -1;
-    return S.misc('veh' + type + d + col, 1, 18, function (a) {
-      const bx = function (l, w, z0, z1, c, o) { o = (o || 0) * sg; if (axisU) a.box(0.5 - l + o, 0.5 - w, 0.5 + l + o, 0.5 + w, z0, z1, c); else a.box(0.5 - w, 0.5 - l + o, 0.5 + w, 0.5 + l + o, z0, z1, c); };
+  // vehicles are drawn for 16 headings (0 = +u, 4 = +v, 8 = -u, 12 = -v) so they can turn through a bend
+  S.vehicleH = function (type, h, col) {
+    const sp = S.misc('veh' + type + '.' + h + '.' + col, 1, 18, function (a) {
+      const th = h * Math.PI / 8, cx = Math.cos(th), cy = Math.sin(th);
+      const bx = function (l, w, z0, z1, c, o) {
+        o = o || 0; const mx = 0.5 + cx * o, my = 0.5 + cy * o;
+        const P = [[mx + cx * l - cy * w, my + cy * l + cx * w], [mx + cx * l + cy * w, my + cy * l - cx * w], [mx - cx * l + cy * w, my - cy * l - cx * w], [mx - cx * l - cy * w, my - cy * l + cx * w]];
+        const N = [[cx, cy], [cy, -cx], [-cx, -cy], [-cy, cx]];
+        for (let i = 0; i < 4; i++) { const n = N[i]; if (n[0] + n[1] <= 0.001) continue; const p = P[i], q = P[(i + 1) & 3]; a.poly([[p[0], p[1], z0], [q[0], q[1], z0], [q[0], q[1], z1], [p[0], p[1], z1]], sh(c, 0.84 + 0.12 * (n[1] - n[0]) / (Math.abs(n[0]) + Math.abs(n[1])))); }
+        a.poly([[P[0][0], P[0][1], z1], [P[1][0], P[1][1], z1], [P[2][0], P[2][1], z1], [P[3][0], P[3][1], z1]], sh(c, 1.12));
+      };
       if (type === 'car') { bx(0.13, 0.06, 0.5, 3.6, CARCOL[col]); bx(0.065, 0.052, 3.6, 6, '#26323f', -0.02); bx(0.012, 0.05, 3.6, 5.6, '#7fa8c8', 0.05); }
-      else if (type === 'truck') { bx(0.16, 0.07, 0.5, 8, ['#e8e6e0', '#c9cdd1', '#d9c28a'][col % 3]); bx(0.045, 0.065, 0.5, 6.5, CARCOL[col], 0.21); }
+      else if (type === 'truck') { const first = cx + cy > 0; if (first) bx(0.16, 0.07, 0.5, 8, ['#e8e6e0', '#c9cdd1', '#d9c28a'][col % 3]); bx(0.045, 0.065, 0.5, 6.5, CARCOL[col], 0.21); if (!first) bx(0.16, 0.07, 0.5, 8, ['#e8e6e0', '#c9cdd1', '#d9c28a'][col % 3]); }
       else if (type === 'bus') { bx(0.2, 0.07, 0.5, 7.5, '#e8a92a'); bx(0.19, 0.072, 3.5, 6, '#26323f'); bx(0.012, 0.073, 1.5, 6.4, '#9fc4e0', 0.195); }
       else if (type === 'fire') { bx(0.19, 0.07, 0.5, 7, '#c8322a'); bx(0.12, 0.03, 7, 8.4, '#e6e6e6', -0.03); bx(0.04, 0.066, 3.5, 6.2, '#26323f', 0.13); }
       else if (type === 'police') { bx(0.13, 0.06, 0.5, 3.6, '#f1f1f1'); bx(0.065, 0.052, 3.6, 6, '#22355a', -0.02); bx(0.012, 0.05, 3.6, 5.6, '#7fa8c8', 0.05); bx(0.02, 0.04, 6, 7.2, '#3a7bff'); }
-      else if (type === 'garbage') { bx(0.17, 0.07, 0.5, 8, '#3f8f5a'); bx(0.045, 0.066, 0.5, 6.5, '#e8e6e0', 0.2); }
+      else if (type === 'garbage') { const first = cx + cy > 0; if (first) bx(0.17, 0.07, 0.5, 8, '#3f8f5a'); bx(0.045, 0.066, 0.5, 6.5, '#e8e6e0', 0.2); if (!first) bx(0.17, 0.07, 0.5, 8, '#3f8f5a'); }
     });
+    sp.u = S.tick; return sp;
   };
+  S.vehicle = function (type, d, col) { return S.vehicleH(type, ((d + 3) & 3) * 4, col); }; // d: 1 = +u, 2 = +v, 3 = -u, 0 = -v
   // UI thumbnail of any sprite
   S.thumb = function (sp, w, h) {
     const c = mk(w, h), g = c.getContext('2d'); if (!sp) return c;
