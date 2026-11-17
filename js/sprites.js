@@ -375,17 +375,18 @@
   // ---------- night / abandoned variants ----------
   // night tint (multiplied over the day sprite and the ground) and the colours of lit windows
   S.NIGHT = [98, 114, 184];
-  const WINCOL = ['#ffe39a', '#ffd27a', '#ffc65a', '#ffa94a', '#fff1cf', '#bfe0ff', '#8fc2ff', '#ffb98a'];
+  // real lamp colours: warm white (homes), neutral white, cool white (offices), a rare bluish TV glow and an old amber bulb
+  const WINCOL = ['#ffe6bd', '#ffdcab', '#ffd29a', '#ffc98a', '#fff4e2', '#eef3ff', '#c9dcff', '#ffbf7a'];
   S.WINCOL = WINCOL;
   // which windows are lit differs per building design: some are almost dark, some fully lit, in mixed colours and
   // brightness. sp.lw[i] = 0 (dark) or colour index + 1; sp.tw = dark windows that may switch on and off at runtime.
   function litOf(sp) {
     if (sp.lw) return sp.lw; const n = sp.wins.length, sd = sp.sd || (n * 131 + sp.w * 7 + (sp.top | 0)), lw = sp.lw = new Uint8Array(n), tw = sp.tw = [];
-    const frac = 0.2 + M.hash(sd, 3, 51) * 0.5, cool = M.hash(sd, 5, 52) < 0.18, mono = M.hash(sd, 7, 53) < 0.3 ? 1 + ((M.hash(sd, 9, 54) * 4) | 0) : 0;
+    const frac = 0.2 + M.hash(sd, 3, 51) * 0.5, cool = M.hash(sd, 5, 52) < 0.18, mono = M.hash(sd, 7, 53) < 0.3 ? 1 + ((M.hash(sd, 9, 54) * 3) | 0) : 0;
     for (let i = 0; i < n; i++) {
       const h = M.hash(i, sd, 77);
       if (h > frac) { if (tw.length < 24 && M.hash(i, sd, 78) < Math.max(0.12, 14 / n)) tw.push(i); continue; }
-      const c = M.hash(i, sd, 79); lw[i] = mono && c < 0.7 ? mono : cool ? (c < 0.6 ? 6 : c < 0.8 ? 5 : 7) : (c < 0.3 ? 1 : c < 0.52 ? 2 : c < 0.7 ? 3 : c < 0.8 ? 4 : c < 0.88 ? 5 : c < 0.93 ? 6 : c < 0.97 ? 7 : 8);
+      const c = M.hash(i, sd, 79); lw[i] = mono && c < 0.75 ? mono : cool ? (c < 0.7 ? 6 : c < 0.92 ? 5 : 7) : (c < 0.3 ? 1 : c < 0.55 ? 2 : c < 0.73 ? 3 : c < 0.8 ? 4 : c < 0.9 ? 5 : c < 0.95 ? 6 : c < 0.975 ? 7 : 8);
     }
     return lw;
   }
@@ -412,7 +413,7 @@
     g.shadowBlur = 7 * sp.r;
     for (let i = 0; i < sp.wins.length; i++) {
       if (!lw[i]) continue; const cold = lw[i] === 6 || lw[i] === 7;
-      g.shadowColor = cold ? 'rgba(120,170,255,0.95)' : 'rgba(255,170,70,0.95)'; g.fillStyle = cold ? 'rgba(170,205,255,0.55)' : 'rgba(255,200,120,0.5)';
+      g.shadowColor = cold ? 'rgba(190,210,255,0.9)' : 'rgba(255,196,128,0.95)'; g.fillStyle = cold ? 'rgba(215,228,255,0.5)' : 'rgba(255,214,160,0.5)';
       winPath(g, sp.wins[i]); g.fill();
     }
     return (sp.bl = c);

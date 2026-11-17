@@ -111,7 +111,7 @@
   Mn.showOptions = function () {
     const s = M.settings, sl = function (k, l) { return '<label>' + l + '</label><input type="range" min="0" max="100" value="' + Math.round(s[k] * 100) + '" data-in="set:' + k + '">'; }, ck = function (k, l) { return '<label></label><label class="chk"><input type="checkbox" ' + (s[k] ? 'checked' : '') + ' data-in="set:' + k + '"> ' + l + '</label>'; };
     const seg = function (key, list) { return '<div class="seg">' + list.map(function (o) { return '<button class="' + (String(s[key]) === String(o[0]) ? 'on' : '') + '" data-act="set:' + key + ':' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>'; };
-    U.modal('Options', '<div class="form">' + sl('master', 'Master volume') + sl('music', 'Music') + sl('sfx', 'Effects') + sl('amb', 'Ambience') +
+    U.modal('Options', '<div class="form">' + sl('master', 'Master volume') + sl('music', 'Music') + (M.Audio.trackName() ? '<label>Now playing</label><div class="nowplay"><span>' + M.Audio.trackName() + '</span>' + (M.mode === 'game' ? '<button class="btn sm" data-act="music-next">Next track</button>' : '') + '</div>' : '') + sl('sfx', 'Effects') + sl('amb', 'Ambience') +
       '<label>Graphics</label>' + seg('quality', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']]) +
       ck('daynight', 'Day and night cycle') + ck('weather', 'Weather effects (rain, fog, clouds)') + ck('edge', 'Scroll when the mouse touches the screen edge') + ck('hints', 'Show goals and hints') +
       '<label>Autosave</label>' + seg('autosave', [[0, 'Off'], [3, '3 months'], [6, '6 months'], [12, 'Yearly']]) +
@@ -147,6 +147,7 @@
       case 'pm-exit': U.modal('Exit to main menu', '<p>Save your city before leaving?</p>', [['Save and exit', function () { M.Save.save('quick', 'Quick save – ' + M.city.name).then(function () { Mn.show(); }); }], ['Exit without saving', function () { Mn.show(); }], ['Cancel', back]]); break;
       case 'ng': Mn.ng[p[1]] = p[2]; A.play('click'); Mn.showNew(); break;
       case 'ng-rnd': Mn.ng.seed = (Math.random() * 999999) | 0; $('#ng-seed').value = Mn.ng.seed; A.play('click'); break;
+      case 'music-next': A.nextTrack(); A.play('click'); setTimeout(function () { if (document.querySelector('.nowplay')) Mn.showOptions(); }, 1500); break;
       case 'set': M.settings[p[1]] = /^\d+$/.test(p[2]) ? +p[2] : p[2]; Mn.applySettings(); A.play('click'); Mn.showOptions(); break;
       case 'slot-load': A.play('select'); M.Save.load(p[1]).then(function (ok) { if (ok) { Mn.enterGame(); U.toast('Loaded ' + M.city.name + '.', 'good'); } else U.toast('That save could not be loaded.', 'bad'); }); break;
       case 'slot-del': U.confirm('Delete save', 'Delete this saved city permanently?', 'Delete', function () { M.Save.remove(p[1]).then(function () { if (p[2] === 'save') Mn.showSave(); else Mn.showLoad(); if (M.mode === 'menu') M.Save.list().then(function (s) { Mn.saves = s; }); }); }); break;

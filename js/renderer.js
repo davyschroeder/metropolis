@@ -241,15 +241,15 @@
       }
       g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
     }
-    // a few windows per building switch on and off through the evening
+    // now and then a window goes on or off: each of a few windows per building reconsiders every 3–10 minutes
     if (nf > 0.25 && lit && sp.wins.length && Cam.zoom > 0.5) {
       const tw = S.twinkle(sp), nt = tw.length;
       if (nt) {
-        const la = Math.min(1, (nf - 0.25) * 1.6), n = Math.min(nt, 3 + b.s * 3), ga = g.globalAlpha, T0 = Rn.time, WC = S.WINCOL;
+        const la = Math.min(1, (nf - 0.25) * 1.6), n = Math.min(nt, 2 + b.s * 2), ga = g.globalAlpha, T0 = Rn.time, WC = S.WINCOL;
         for (let q = 0; q < n; q++) {
-          const per = 6 + ((b.id * 13 + q * 7) % 11), tt = (T0 + b.id * 2.37 + q * 1.31) / per, fl = Math.floor(tt), cur = M.hash(b.id, q, fl) < 0.5 ? 1 : 0, prev = M.hash(b.id, q, fl - 1) < 0.5 ? 1 : 0;
+          const per = 180 + ((b.id * 13 + q * 37) % 420), tt = (T0 + b.id * 23.7 + q * 61.3) / per, fl = Math.floor(tt), cur = M.hash(b.id, q, fl) < 0.5 ? 1 : 0, prev = M.hash(b.id, q, fl - 1) < 0.5 ? 1 : 0;
           const al = prev + (cur - prev) * Math.min(1, (tt - fl) * per / 0.8); if (al < 0.02) continue;
-          const p = sp.wins[tw[(b.id * 5 + q * 3) % nt]]; g.globalAlpha = ga * la * al * 0.92; g.fillStyle = WC[(b.id + q * 3) % 5];
+          const p = sp.wins[tw[(b.id * 5 + q * 3) % nt]]; g.globalAlpha = ga * la * al * 0.92; g.fillStyle = WC[(b.id + q * 3) % 6];
           g.beginPath(); g.moveTo(bx + p[0][0], by + p[0][1]); g.lineTo(bx + p[1][0], by + p[1][1]); g.lineTo(bx + p[2][0], by + p[2][1]); g.lineTo(bx + p[3][0], by + p[3][1]); g.closePath(); g.fill();
         }
         g.globalAlpha = ga;

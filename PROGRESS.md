@@ -186,3 +186,10 @@ element, dragging over the highlighted area) – passes at 1366×768 and 390×84
 - Night tint is one constant, `S.NIGHT = [98,114,184]` (was 58,78,160), used by the night sprites, the ground layer and occluder tiles; the blue night grade is softer.
 - `litOf(sp)` in `sprites.js` decides the lit windows per building design: lit share 20–70 %, mixed colours (`S.WINCOL`), some buildings cool-white or single-coloured, varying brightness. `sp.sd` is the design seed.
 - A few dark windows per building (`S.twinkle(sp)`, 6–12 depending on size) switch on and off at runtime with a short fade (in `drawBuildingPart`, only above zoom 0.5).
+
+## 0.11.0 — recorded music
+- `music/main-menu.mp3` loops in the main menu; `music/cozy-city-1..6.mp3` play in the city in shuffled order (every track once before a repeat, 2.5 s pause between tracks). About 24 MB in total, ~190 kbps.
+- Player lives in `js/audio.js` (`A.music`, `A.musicTick`): one `<audio>` element that streams (no WebAudio routing, so it also works from file://), fades on menu↔city changes, starts after the first click or key press, pauses when the tab is hidden or the music volume is 0.
+- If the files cannot be loaded (e.g. a copy of the game without the `music/` folder), the old generated tune plays instead.
+- Options show the current track and, in the city, a "Next track" button (`music-next` action in `menu.js`).
+- Window lights: realistic lamp colours (`S.WINCOL`: warm, neutral and cool white, rare TV blue and amber) and the on/off switching is rare now — 4 or 6 windows per building each reconsider every 3–10 minutes.
