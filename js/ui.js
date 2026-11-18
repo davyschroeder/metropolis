@@ -51,7 +51,10 @@
       '<div id="cursorinfo" class="hidden"></div><div id="banner" class="hidden"></div>';
     document.addEventListener('pointerdown', function (e) { if (e.target.closest && e.target.closest('#panel, #modal')) { U.pressing = true; U.lastPress = performance.now(); } }, true);
     document.addEventListener('pointerup', function () { if (U.pressing) { U.lastPress = performance.now(); setTimeout(function () { U.pressing = false; }, 0); } }, true);
-    document.addEventListener('click', onClick); document.addEventListener('pointerdown', function (e) { if (e.pointerType !== 'mouse' && !(e.target.closest && e.target.closest('[data-tip]'))) $('#tooltip').classList.remove('show'); });
+    // touch screens: no hover, no right-click, no keyboard. U.touch follows the kind of pointer that was used last.
+    U.setTouch = function (on) { if (U.touch === on) return; U.touch = on; document.body.classList.toggle('touch', on); setTimeout(function () { if (M.city && U.cat) U.buildTray(); }, 600); }; /* rebuilt a moment later, never in the middle of a tap */
+    U.setTouch(!!(window.matchMedia && window.matchMedia('(hover: none)').matches));
+    document.addEventListener('click', onClick); document.addEventListener('pointerdown', function (e) { U.setTouch(e.pointerType !== 'mouse'); if (e.pointerType !== 'mouse' && !(e.target.closest && e.target.closest('[data-tip]'))) $('#tooltip').classList.remove('show'); }, true);
     document.addEventListener('input', onInput); document.addEventListener('change', onChange);
     document.addEventListener('mouseover', onOver); document.addEventListener('mouseout', function (e) { if (e.target.closest && e.target.closest('[data-tip]')) $('#tooltip').classList.remove('show'); });
     $('#mm').addEventListener('pointerdown', function (e) { const r = e.target.getBoundingClientRect(), n = M.world.n; M.Camera.centerOn((e.clientX - r.left) / r.width * n, (e.clientY - r.top) / r.height * n); });
@@ -82,7 +85,8 @@
   function onChange(e) { const t = e.target; if (t.dataset && t.dataset.in) { M.Panels.input(t.dataset.in, t, true); if (t.type === 'range') t.blur(); } }
   function onOver(e) {
     const t = e.target.closest ? e.target.closest('[data-tip]') : null, tip = $('#tooltip'); if (!t) return;
-    tip.innerHTML = t.dataset.tip; tip.classList.add('show');
+    tip.innerHTML = U.touch ? t.dataset.tip.replace(/\s*<kbd>[^<]*<\/kbd>/g, '') : t.dataset.tip; tip.classList.add('show');
+    clearTimeout(U.tipTimer); if (U.touch) U.tipTimer = setTimeout(function () { tip.classList.remove('show'); }, 1800); // a tapped tip would otherwise stay on screen
     const r = t.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight; let x = r.left + r.width / 2 - tw / 2, y = r.top - th - 8;
     if (y < 4) y = r.bottom + 8; if (r.left < 70 && r.height < 60 && r.top > 60 && r.bottom < innerHeight - 120) { x = r.right + 8; y = r.top + r.height / 2 - th / 2; }
     tip.style.left = M.clamp(x, 4, innerWidth - tw - 4) + 'px'; tip.style.top = M.clamp(y, 4, innerHeight - th - 4) + 'px';
@@ -100,6 +104,7 @@
       case 'panel': U.openPanel(v); M.Audio.play('select'); break;
       case 'close-panel': U.closePanel(); M.Audio.play('click'); break;
       case 'undo': if (!B.undoLast()) U.toast('Nothing to undo', 'info'); break;
+      case 'rotate': B.flip ^= 1; M.Input.updatePreview(); M.Audio.play('click'); U.toast('Rotated: the next building faces the other way', 'info'); break;
       case 'minimap': U.toggleMinimap(); break;
       case 'item': U.pickItem(v, p[2], p[3]); break;
       case 'modal': U.modalAct(+v); break;
@@ -131,7 +136,7 @@
     const obj = M.Progression.objectives(), sc = M.Progression.scenarioStatus(); let hint = '';
     let h = '<div class="ghead" data-act="goals-toggle"><b>' + M.TIERS[c.tier].name + '</b><small>' + obj.filter(function (o) { return o[1]; }).length + '/' + obj.length + '</small></div><div class="gbody">';
     for (const o of obj) { h += '<div class="goal' + (o[1] ? ' done' : '') + '"><i>' + (o[1] ? '✓' : '') + '</i>' + esc(o[0]) + '</div>'; if (!o[1] && !hint) hint = o[2]; }
-    if (hint) h += '<div class="hint">' + esc(hint) + '</div>';
+    if (hint) h += '<div class="hint">' + esc(U.touch ? hint.replace(/ \(key [^)]*\)/g, '') : hint) + '</div>';
     if (sc && !sc.won && !sc.lost) h += '<div class="hint sc"><b>' + esc(sc.name) + '</b> · ' + sc.left.toFixed(1) + ' years left</div>';
     h += '</div>';
     if (g._h !== h) { g._h = h; g.innerHTML = h; }
@@ -179,7 +184,13 @@
     }
     tray.appendChild(row);
     const hint = document.createElement('div'); hint.className = 'trayhint';
-    hint.innerHTML = cat === 'road' ? 'Drag to build. Drag over a road to upgrade it. Right-click cancels.' : (cat === 'res' || cat === 'com' || cat === 'ind') ? 'Drag a rectangle to zone. Lots need a road within 2 tiles.' : cat === 'bulldoze' ? 'Drag a rectangle to demolish.' : cat === 'district' ? 'Paint districts, then give each its own taxes and policies.' : '<kbd>R</kbd> rotates · Right-click or <kbd>Esc</kbd> cancels · Roads carry power and water to everything within 3 tiles.';
+    const simple = cat === 'road' || cat === 'res' || cat === 'com' || cat === 'ind' || cat === 'bulldoze' || cat === 'district';
+    hint.innerHTML = cat === 'road' ? 'Drag to build. Drag over a road to upgrade it.' + (U.touch ? '' : ' Right-click cancels.') : (cat === 'res' || cat === 'com' || cat === 'ind') ? 'Drag a rectangle to zone. Lots need a road within 2 tiles.' : cat === 'bulldoze' ? 'Drag a rectangle to demolish.' : cat === 'district' ? 'Paint districts, then give each its own taxes and policies.' : U.touch ? 'Tap to place, or slide and let go to aim. Two fingers move the map.' : '<kbd>R</kbd> rotates · Right-click or <kbd>Esc</kbd> cancels · Roads carry power and water to everything within 3 tiles.';
+    if (U.touch) { // what the keyboard and the right mouse button do on a desktop
+      const bar = document.createElement('div'); bar.className = 'traybtns';
+      bar.innerHTML = (simple ? '' : '<button class="btn" data-act="rotate">' + icon('undo') + 'Rotate</button>') + '<button class="btn" data-act="undo">' + icon('undo') + 'Undo</button><button class="btn" data-act="tool-pointer">' + icon('close') + 'Done</button>';
+      tray.appendChild(bar);
+    }
     tray.appendChild(hint);
   };
   U.selectCat = function (id) {
@@ -205,7 +216,9 @@
   U.updateToolState = function () { U.buildTray(); const p = $('#sb-tool-pointer'); if (p) p.classList.toggle('on', B.tool.type === 'pointer'); $('#game').style.cursor = B.tool.type === 'pointer' ? 'grab' : 'crosshair'; };
   U.cancelTool = function () { U.cat = null; B.setTool(null); if (M.Render.overlay === 'district') U.setOverlay(null); U.buildTray(); };
   U.cursorInfo = function (text, ok, x, y) { const e = $('#cursorinfo'); if (!text) { e.classList.add('hidden'); return; } e.textContent = text; e.classList.remove('hidden'); e.classList.toggle('bad', ok === false); if (x != null) U.cursorMove(x, y); };
-  U.cursorMove = function (x, y) { const e = $('#cursorinfo'); if (e.classList.contains('hidden')) return; e.style.left = Math.min(innerWidth - e.offsetWidth - 6, x + 18) + 'px'; e.style.top = Math.max(54, y - 34) + 'px'; };
+  U.cursorMove = function (x, y) { const e = $('#cursorinfo'); if (e.classList.contains('hidden')) return;
+    if (U.touch) { e.style.left = M.clamp(x - e.offsetWidth / 2, 6, innerWidth - e.offsetWidth - 6) + 'px'; e.style.top = Math.max(54, y - 84) + 'px'; return; } // above the finger, not under it
+    e.style.left = Math.min(innerWidth - e.offsetWidth - 6, x + 18) + 'px'; e.style.top = Math.max(54, y - 34) + 'px'; };
 
   // ---------------- overlays / data views ----------------
   const OVS = [['none', 'None'], ['zones', 'Zones'], ['traffic', 'Traffic'], ['air', 'Air pollution'], ['gnd', 'Ground pollution'], ['noise', 'Noise'], ['lv', 'Land value'], ['crime', 'Crime'], ['happy', 'Happiness'], ['power', 'Electricity'], ['water', 'Water'], ['fire', 'Fire cover'], ['police', 'Police cover'], ['health', 'Healthcare'], ['edu', 'Schools'], ['edu2', 'High schools'], ['park', 'Parks'], ['bus', 'Bus stops'], ['district', 'Districts']];

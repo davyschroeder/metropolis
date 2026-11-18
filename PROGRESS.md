@@ -204,3 +204,10 @@ element, dragging over the highlighted area) – passes at 1366×768 and 390×84
   - dusk in a big city: a blend from the previous step is reused until its turn to be redrawn (frame time at dusk 95 → 48 ms in the software renderer);
   - sprite memory: by day the night versions are freed when the budget is exceeded, and when it is still exceeded (`S.full`) new buildings reuse looks that are already drawn.
 - Open observation: on normal difficulty a city of 25,000+ earns far more than it can spend (over a million in the bank after 14 years). Not changed.
+
+## 0.12.1 — touch
+Tested with touch input only (taps, one-finger drags, pinch) on 390×844, 844×390, 1280×800 and 800×1280: menus, new game, panning, pinch zoom, roads, zones, placing, bulldozing, inspecting, panels, pause menu, and the whole tutorial (`test/tutorial-touch-test.py <dir> [w h]`).
+- `U.touch` (ui.js) follows the last pointer type and sets `body.touch`. On touch the tray gets **Rotate / Undo / Done** buttons (`.traybtns`; `rotate` is a new action), hints drop the keyboard and right-click wording, tooltips hide again after 1.8 s, and the price label sits above the finger.
+- Bigger targets on touch: segment buttons, buttons, checkboxes, slider thumbs, top-bar figures.
+- **Phone held sideways** (`@media (max-height: 520px) and (min-width: 821px)`): the side bar becomes a two-column grid (it ran off the screen), the minimap moves to the top right (it covered the tutorial buttons, so the tutorial could not be started), goals start collapsed, panels and the data-view list scroll, and the tray is one low row with its buttons beside the cards.
+- Not changed: a tap places a building at once (Undo is in the tray); the finger hides the tile under it — slide before lifting to aim.
