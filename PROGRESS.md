@@ -211,3 +211,15 @@ Tested with touch input only (taps, one-finger drags, pinch) on 390×844, 844×3
 - Bigger targets on touch: segment buttons, buttons, checkboxes, slider thumbs, top-bar figures.
 - **Phone held sideways** (`@media (max-height: 520px) and (min-width: 821px)`): the side bar becomes a two-column grid (it ran off the screen), the minimap moves to the top right (it covered the tutorial buttons, so the tutorial could not be started), goals start collapsed, panels and the data-view list scroll, and the tray is one low row with its buttons beside the cards.
 - Not changed: a tap places a building at once (Undo is in the tray); the finger hides the tile under it — slide before lifting to aim.
+
+## 0.13.0 — interface redesign (signage)
+The old interface was the stock "dark glass" kit (translucent navy panels, blur, amber gradients, small uppercase tracked labels, pill badges, `A · B · C` strings). It is replaced by a look taken from the game's subject, street signage:
+- **Tokens** (css/style.css `:root`): sign blue `#12489b`, ink `#111c2e`, sheet `#f6f7f5`, rule `#c8cfd3`, highlight yellow `#ffcf1a`; semantic green/red/amber darkened for white backgrounds.
+- **Plates and sheets**: top bar, side bar and minimap are blue plates with a white keyline; panels, dialogs, the tray, goals and toasts are white sheets with an ink edge and a blue header strip. Yellow means selected or temporary; the tutorial card is a yellow diversion sign. No blur, no gradients, no glows; radius 3–5 px; flat offset shadow.
+- **Typeface**: "Metro Sign" in `fonts/` — a renamed Latin subset of TeX Gyre Heros Condensed (GUST Font License, see fonts/README.txt), regular and bold, 16 KB each. Sizes went up about 1.5 px because the face is condensed. Chart text uses the same face.
+- **Main menu**: a signpost — the title is a place-name sign on a pole, the choices are plates below it; the dark gradient over the city is gone.
+- Copy: no more middle-dot strings, no uppercase labels, "Step 3 of 14", toasts with a location end in "Show".
+- Chart and bar colours in panels.js re-picked for a white background.
+- Sliders: ink track with a yellow rectangular handle; toggles are square switches.
+- **Tap picking**: `Camera.pickBuilding(sx, sy)` selects the building whose drawn body is under the pointer (the front one wins); before, only the ground tile counted, so a tap on a roof selected the land behind it. In the tutorial's inspect step a missed tap no longer leaves a tile sheet over the houses, and a hint appears.
+- The website sync must copy `fonts/` too.

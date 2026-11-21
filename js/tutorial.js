@@ -84,10 +84,11 @@
       text: 'Residents need work. Zone a little <b>Commercial</b> (' + kbd('3') + ', shops) and <b>Industrial</b> (' + kbd('4') + ', factories) land along the other side of the road.<br><br>Tip: in a real city keep industry away from homes – it is noisy and dirty.',
       done: function () { return zonedNearRoad(2) >= 3 && zonedNearRoad(3) >= 3; } },
     { title: 'Read the demand bars', target: '.rci', info: true,
-      text: 'These three bars show what your citizens want: <b style="color:#6fd27a">R</b>esidential, <b style="color:#6aa9ff">C</b>ommercial and <b style="color:#f0c04a">I</b>ndustrial. A bar above the middle line means “build more of this”; below it means there is too much.<br><br>Zoning what the bars ask for is the heart of growing your city.' },
-    { title: 'Inspect a building', target: '#sb-tool-pointer', enter: function () { look(P().res); if (M.Build.tool.type !== 'pointer') U.cancelTool(); },
+      text: 'These three bars show what your citizens want: <b style="color:#146c3a">R</b>esidential, <b style="color:#12489b">C</b>ommercial and <b style="color:#7a4a00">I</b>ndustrial. A bar above the middle line means “build more of this”; below it means there is too much.<br><br>Zoning what the bars ask for is the heart of growing your city.' },
+    { title: 'Inspect a building', target: '#sb-tool-pointer', enter: function () { T.missed = false; look(P().res); if (M.Build.tool.type !== 'pointer') U.cancelTool(); },
       text: 'Click any <b>house</b> on the map with the Inspect tool (' + kbd('Q') + ') to see who lives there, how happy they are and what they lack.<br><br>Small icons above buildings warn you about problems: ⚡ no power, 💧 no water, a road sign means no road access.',
-      done: function () { return U.panel === 'inspect'; } },
+      hint: function () { return T.missed ? 'That was an empty piece of land. Pick one of the houses.' : ''; },
+      done: function () { if (U.panel === 'tile') { T.missed = true; U.closePanel(); } return U.panel === 'inspect'; } }, // (the tile sheet would cover the houses on a small screen)
     { title: 'Check your budget', target: '#sb-panel-budget',
       text: 'Click the <b>$ button</b> on the left to open the budget. Here you set <b>tax rates</b> and department funding, and see what everything costs each month. The HUD at the top shows your money and last month’s balance.',
       done: function () { return U.panel === 'budget'; } },
@@ -131,7 +132,7 @@
     let prog = '';
     if (st.progress) { const p = st.progress(); prog = '<div class="tprog"><i style="width:' + Math.min(100, p[0] / p[1] * 100).toFixed(0) + '%"></i></div><small class="tpn">' + Math.min(p[0], p[1]) + ' / ' + p[1] + ' residents</small>'; }
     const hint = st.hint && T.enterT > 2 ? st.hint() : '';
-    const h = '<div class="thead"><small>Tutorial · ' + (T.step + 1) + ' / ' + T.STEPS.length + '</small><button class="ib" data-act="tut-skip" data-tip="Close the tutorial">' + U.icon('close') + '</button></div>' +
+    const h = '<div class="thead"><small>Step ' + (T.step + 1) + ' of ' + T.STEPS.length + '</small><button class="ib" data-act="tut-skip" data-tip="Close the tutorial">' + U.icon('close') + '</button></div>' +
       '<b class="ttl">' + st.title + '</b><div class="ttxt">' + st.text + '</div>' + prog + (hint ? '<div class="thint">' + hint + '</div>' : '') +
       '<div class="tbtns">' + (T.step > 0 ? '<button class="btn sm" data-act="tut-back">Back</button>' : '') + (st.info ? '<button class="btn primary" data-act="tut-next">' + (st.next || 'Next') + '</button>' : '<span class="twait">Waiting for you…</span>') + '</div>';
     if (force || card._h !== h) { card._h = h; card.innerHTML = h; }

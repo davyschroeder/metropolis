@@ -52,7 +52,7 @@
         (hasCity ? '<button class="mbtn" data-act="m-save">Save Game</button>' : '') +
         '<button class="mbtn" data-act="m-tutorial">Tutorial<small>Learn the basics in 5 minutes</small></button>' +
         '<button class="mbtn" data-act="m-options">Options</button><button class="mbtn" data-act="m-stats">Statistics</button><button class="mbtn" data-act="m-ach">Achievements</button><button class="mbtn" data-act="m-help">How to Play</button>' +
-        '<div class="foot">v' + M.VERSION + ' · HTML5 Canvas · ' + (M.Save.persistent ? 'saves are stored in this browser' : 'storage unavailable here: saves last for this session only') + '</div></div>';
+        '<div class="foot">Version ' + M.VERSION + ', ' + (M.Save.persistent ? 'saves are stored in this browser' : 'storage unavailable here: saves last for this session only') + '</div></div>';
     };
     draw(Mn.saves || []); M.Save.list().then(draw);
   };
@@ -92,7 +92,7 @@
     else if (M.settings.hints) U.toast('Start with a road, then zone homes beside it. The goals list on the right shows what to do next.', 'info');
   };
   // ---------------- save / load ----------------
-  const slotHtml = function (s, acts) { const m = s.meta; return '<div class="slot"><div><b>' + esc(s.name) + '</b><small>' + esc(m.city) + ' · ' + M.fmt(m.pop) + ' residents · ' + (m.mode === 'sandbox' ? 'sandbox' : M.money(m.money)) + ' · ' + M.dateStr(m.day) + ' · ' + M.TIERS[m.tier].name + '</small><small>' + when(s.time) + '</small></div><div class="sbtn">' + acts + '</div></div>'; };
+  const slotHtml = function (s, acts) { const m = s.meta; return '<div class="slot"><div><b>' + esc(s.name) + '</b><small>' + esc(m.city) + ', ' + M.fmt(m.pop) + ' residents, ' + (m.mode === 'sandbox' ? 'sandbox' : M.money(m.money)) + ', ' + M.dateStr(m.day) + ', ' + M.TIERS[m.tier].name + '</small><small>' + when(s.time) + '</small></div><div class="sbtn">' + acts + '</div></div>'; };
   U.showLoad = Mn.showLoad = function () {
     M.Save.list().then(function (saves) {
       Mn.saves = saves;
@@ -124,7 +124,7 @@
   Mn.showAch = function () { const got = Mn.demo || !M.city ? (M.settings.ach || {}) : Object.assign({}, M.settings.ach || {}, M.city.ach); U.modal('Achievements', '<p class="note">' + Object.keys(got).length + ' of ' + M.ACHIEVEMENTS.length + ' earned across all your cities.</p>' + M.Panels.achHtml(got), [['Close', back]], false, true); };
   Mn.showHelp = function () {
     U.modal('How to play', '<div class="help"><h4>The basics</h4><ol><li><b>Roads</b> – drag to build. Everything needs a road within 2 tiles.</li><li><b>Zones</b> – paint Residential, Commercial and Industrial land. Buildings appear by themselves when there is demand (the R C I bars at the top).</li><li><b>Electricity and water</b> – roads carry both to everything within 3 tiles. Put plants, pumps and towers next to a road.</li><li><b>Services</b> – as the city grows, citizens ask for garbage collection, fire, police, health, schools and parks.</li><li><b>Budget</b> – taxes pay for upkeep. Watch the monthly balance and use loans carefully.</li></ol>' +
-      '<h4>Controls</h4><table><tr><td>Pan</td><td>Drag with the Inspect tool, right/middle-drag, <kbd>W A S D</kbd> or arrows · two fingers on touch</td></tr><tr><td>Zoom</td><td>Mouse wheel, <kbd>+</kbd> <kbd>−</kbd>, pinch</td></tr><tr><td>Categories</td><td><kbd>1</kbd>–<kbd>0</kbd>, <kbd>B</kbd> bulldozer, <kbd>Q</kbd> inspect</td></tr><tr><td>Rotate building</td><td><kbd>R</kbd></td></tr><tr><td>Cancel</td><td>Right-click or <kbd>Esc</kbd></td></tr><tr><td>Speed</td><td><kbd>Space</kbd> pause, <kbd>[</kbd> <kbd>]</kbd> slower / faster</td></tr><tr><td>Data views</td><td><kbd>Tab</kbd> cycles · <kbd>M</kbd> minimap</td></tr><tr><td>Undo / save</td><td><kbd>Ctrl+Z</kbd> · <kbd>Ctrl+S</kbd> quick save</td></tr></table></div>', [['Got it', back]], false, true);
+      '<h4>Controls</h4><table><tr><td>Pan</td><td>Drag with the Inspect tool, right/middle-drag, <kbd>W A S D</kbd> or arrows; two fingers on touch</td></tr><tr><td>Zoom</td><td>Mouse wheel, <kbd>+</kbd> <kbd>−</kbd>, pinch</td></tr><tr><td>Categories</td><td><kbd>1</kbd>–<kbd>0</kbd>, <kbd>B</kbd> bulldozer, <kbd>Q</kbd> inspect</td></tr><tr><td>Rotate building</td><td><kbd>R</kbd></td></tr><tr><td>Cancel</td><td>Right-click or <kbd>Esc</kbd></td></tr><tr><td>Speed</td><td><kbd>Space</kbd> pause, <kbd>[</kbd> <kbd>]</kbd> slower / faster</td></tr><tr><td>Data views</td><td><kbd>Tab</kbd> cycles, <kbd>M</kbd> minimap</td></tr><tr><td>Undo / save</td><td><kbd>Ctrl+Z</kbd>, <kbd>Ctrl+S</kbd> quick save</td></tr></table></div>', [['Got it', back]], false, true);
   };
 
   // ---------------- actions ----------------

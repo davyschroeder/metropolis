@@ -57,6 +57,7 @@ js/sprites.js       procedural art toolkit, zoned buildings, vehicles, trees, ro
 js/sprites2.js      procedural art for placeable buildings
 js/sprites3.js      extra forms for zoned buildings (80 looks per zone level)
 music/              main-menu.mp3 and cozy-city-1..6.mp3 (streamed; the game falls back to a generated tune without them)
+fonts/              the interface typeface, Metro Sign (a subset of TeX Gyre Heros Condensed; licence and source in fonts/README.txt)
 js/renderer.js      chunked terrain, depth-sorted objects, lighting, weather, overlays, minimap
 js/engine.js        fixed-tick simulation clock and main loop
 js/save.js          IndexedDB save slots, autosave, settings

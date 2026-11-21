@@ -32,7 +32,7 @@
       '<div class="stat" data-act="panel:pop" data-tip="Population">' + icon('pop') + '<b id="h-pop">0</b></div>' +
       '<div class="stat" data-act="panel:budget" data-tip="Treasury and last month’s balance">' + icon('budget') + '<b id="h-money"></b><small id="h-net"></small></div>' +
       '<div class="stat" data-act="panel:advisor" data-tip="Citizen happiness">' + icon('happy') + '<b id="h-happy"></b></div>' +
-      '<div class="rci" data-tip="Demand for <b style=\'color:#6fd27a\'>R</b>esidential, <b style=\'color:#6aa9ff\'>C</b>ommercial and <b style=\'color:#f0c04a\'>I</b>ndustrial zones. Up means more is wanted."><div class="rbar"><div><i id="h-dr" style="background:#4caf50"></i></div><em style="color:#6fd27a">R</em></div><div class="rbar"><div><i id="h-dc" style="background:#3d8bfd"></i></div><em style="color:#6aa9ff">C</em></div><div class="rbar"><div><i id="h-di" style="background:#e0a526"></i></div><em style="color:#f0c04a">I</em></div></div>' +
+      '<div class="rci" data-tip="Demand for <b style=\'color:#7fe39a\'>R</b>esidential, <b style=\'color:#9cc8ff\'>C</b>ommercial and <b style=\'color:#ffd84a\'>I</b>ndustrial zones. Up means more is wanted."><div class="rbar"><div><i id="h-dr" style="background:#63dd80"></i></div><em style="color:#6fd27a">R</em></div><div class="rbar"><div><i id="h-dc" style="background:#9cc8ff"></i></div><em style="color:#6aa9ff">C</em></div><div class="rbar"><div><i id="h-di" style="background:#ffd84a"></i></div><em style="color:#f0c04a">I</em></div></div>' +
       '<div class="spacer"></div>' +
       '<div class="stat date" data-tip="Date and weather"><span id="h-weather"></span><b id="h-date"></b></div>' +
       '<div class="speed">' + [0, 1, 2, 4].map(function (s) { return '<button class="ib sp" data-act="speed:' + s + '" data-tip="' + (s ? s + '× speed' : 'Pause <kbd>Space</kbd>') + '">' + (s === 0 ? icon('pause') : '<span class="pl">' + '▸'.repeat(s === 4 ? 3 : s) + '</span>') + '</button>'; }).join('') + '</div>' +
@@ -118,7 +118,7 @@
   let lastMoney = null;
   U.updateHUD = function () {
     const c = M.city; if (!c) return; const s = c.stats;
-    $('#h-name').textContent = c.name; $('#h-tier').textContent = M.TIERS[c.tier].name + (c.mode === 'sandbox' ? ' · Sandbox' : '');
+    $('#h-name').textContent = c.name; $('#h-tier').textContent = M.TIERS[c.tier].name + (c.mode === 'sandbox' ? ', sandbox' : '');
     $('#h-pop').textContent = M.fmt(c.pop);
     $('#h-money').textContent = c.mode === 'sandbox' ? '∞' : M.money(c.money); $('#h-money').classList.toggle('neg', c.money < 0);
     const net = c.fin.incTotal - c.fin.expTotal; $('#h-net').textContent = (net >= 0 ? '+' : '−') + M.short(Math.abs(net)) + '/mo'; $('#h-net').className = net >= 0 ? 'pos' : 'neg';
@@ -137,7 +137,7 @@
     let h = '<div class="ghead" data-act="goals-toggle"><b>' + M.TIERS[c.tier].name + '</b><small>' + obj.filter(function (o) { return o[1]; }).length + '/' + obj.length + '</small></div><div class="gbody">';
     for (const o of obj) { h += '<div class="goal' + (o[1] ? ' done' : '') + '"><i>' + (o[1] ? '✓' : '') + '</i>' + esc(o[0]) + '</div>'; if (!o[1] && !hint) hint = o[2]; }
     if (hint) h += '<div class="hint">' + esc(U.touch ? hint.replace(/ \(key [^)]*\)/g, '') : hint) + '</div>';
-    if (sc && !sc.won && !sc.lost) h += '<div class="hint sc"><b>' + esc(sc.name) + '</b> · ' + sc.left.toFixed(1) + ' years left</div>';
+    if (sc && !sc.won && !sc.lost) h += '<div class="hint sc"><b>' + esc(sc.name) + '</b>: ' + sc.left.toFixed(1) + ' years left</div>';
     h += '</div>';
     if (g._h !== h) { g._h = h; g.innerHTML = h; }
   };
@@ -151,8 +151,8 @@
     return d;
   }
   function defTip(d) {
-    let t = '<b>' + esc(d.name) + '</b><br>' + esc(d.desc) + '<br><span class="tt">Cost ' + M.money(d.cost * M.DIFF[M.city.diff].cost) + (d.upkeep ? ' · Upkeep ' + M.money(d.upkeep) + '/mo' : '');
-    if (d.size > 1) t += ' · ' + d.size + '×' + d.size + ' tiles'; if (d.jobs) t += ' · ' + d.jobs + ' jobs'; if (d.usePower) t += ' · uses ' + d.usePower + ' MW';
+    let t = '<b>' + esc(d.name) + '</b><br>' + esc(d.desc) + '<br><span class="tt">Cost ' + M.money(d.cost * M.DIFF[M.city.diff].cost) + (d.upkeep ? ', upkeep ' + M.money(d.upkeep) + '/mo' : '');
+    if (d.size > 1) t += ', ' + d.size + '×' + d.size + ' tiles'; if (d.jobs) t += ', ' + d.jobs + ' jobs'; if (d.usePower) t += ', uses ' + d.usePower + ' MW';
     return t + '</span>';
   }
   U.buildTray = function () {
@@ -162,7 +162,7 @@
     const S = M.Sprites, tool = B.tool, row = document.createElement('div'); row.className = 'cards';
     const lockName = function (tier) { return M.tierOK(tier) ? null : M.TIERS[tier].name; };
     if (cat === 'road') {
-      for (let k = 1; k < M.ROADS.length; k++) { const r = M.ROADS[k]; row.appendChild(card('item:road:' + k, r.name, M.money(r.cost * M.DIFF[c.diff].cost) + '/tile', thumbOf('road' + k, function () { return S.roadIcon(k, 64, 44); }), '<b>' + r.name + '</b><br>' + r.desc + '<br><span class="tt">' + (r.cap ? 'Capacity ' + r.cap + ' vehicles · ' : '') + 'Upkeep ' + M.money(r.upkeep * 100) + ' per 100 tiles/mo · Bridges cost ' + M.BRIDGE_COST + '×</span>', lockName(r.tier), tool.type === 'road' && tool.road === k)); }
+      for (let k = 1; k < M.ROADS.length; k++) { const r = M.ROADS[k]; row.appendChild(card('item:road:' + k, r.name, M.money(r.cost * M.DIFF[c.diff].cost) + '/tile', thumbOf('road' + k, function () { return S.roadIcon(k, 64, 44); }), '<b>' + r.name + '</b><br>' + r.desc + '<br><span class="tt">' + (r.cap ? 'Capacity ' + r.cap + ' vehicles, ' : '') + 'Upkeep ' + M.money(r.upkeep * 100) + ' per 100 tiles/mo, Bridges cost ' + M.BRIDGE_COST + '×</span>', lockName(r.tier), tool.type === 'road' && tool.road === k)); }
     } else if (cat === 'res' || cat === 'com' || cat === 'ind') {
       const z = cat === 'res' ? 1 : cat === 'com' ? 2 : 3, lv = [0, 1, 3, 5];
       for (let d = 1; d <= 3; d++) row.appendChild(card('item:zone:' + z + ':' + d, M.DENS_NAME[d], M.money(M.ZCOST[d] * M.DIFF[c.diff].cost) + '/tile', thumbOf('z' + z + d, function () { return S.thumb(S.zoned(z, lv[d], 2, 1, 0, 0), 64, 44); }), '<b>' + M.ZNAME[z] + ' – ' + M.DENS_NAME[d] + '</b><br>Drag to paint a zone. Buildings grow by themselves when there is demand, a road within 2 tiles, electricity and (beyond the first level) water.<br><span class="tt">Allows up to: ' + M.ZB[z].names[d === 1 ? 2 : d === 2 ? 3 : 5] + '</span>', lockName(M.DENS_TIER[d]), tool.type === 'zone' && tool.z === z && tool.d === d));
@@ -185,7 +185,7 @@
     tray.appendChild(row);
     const hint = document.createElement('div'); hint.className = 'trayhint';
     const simple = cat === 'road' || cat === 'res' || cat === 'com' || cat === 'ind' || cat === 'bulldoze' || cat === 'district';
-    hint.innerHTML = cat === 'road' ? 'Drag to build. Drag over a road to upgrade it.' + (U.touch ? '' : ' Right-click cancels.') : (cat === 'res' || cat === 'com' || cat === 'ind') ? 'Drag a rectangle to zone. Lots need a road within 2 tiles.' : cat === 'bulldoze' ? 'Drag a rectangle to demolish.' : cat === 'district' ? 'Paint districts, then give each its own taxes and policies.' : U.touch ? 'Tap to place, or slide and let go to aim. Two fingers move the map.' : '<kbd>R</kbd> rotates · Right-click or <kbd>Esc</kbd> cancels · Roads carry power and water to everything within 3 tiles.';
+    hint.innerHTML = cat === 'road' ? 'Drag to build. Drag over a road to upgrade it.' + (U.touch ? '' : ' Right-click cancels.') : (cat === 'res' || cat === 'com' || cat === 'ind') ? 'Drag a rectangle to zone. Lots need a road within 2 tiles.' : cat === 'bulldoze' ? 'Drag a rectangle to demolish.' : cat === 'district' ? 'Paint districts, then give each its own taxes and policies.' : U.touch ? 'Tap to place, or slide and let go to aim. Two fingers move the map.' : '<kbd>R</kbd> rotates. Right-click or <kbd>Esc</kbd> cancels. Roads carry power and water to everything within 3 tiles.';
     if (U.touch) { // what the keyboard and the right mouse button do on a desktop
       const bar = document.createElement('div'); bar.className = 'traybtns';
       bar.innerHTML = (simple ? '' : '<button class="btn" data-act="rotate">' + icon('undo') + 'Rotate</button>') + '<button class="btn" data-act="undo">' + icon('undo') + 'Undo</button><button class="btn" data-act="tool-pointer">' + icon('close') + 'Done</button>';

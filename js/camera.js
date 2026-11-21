@@ -8,6 +8,19 @@
   C.toWorld = function (sx, sy) { return [(sx - C.w / 2) / C.zoom + C.x, (sy - C.h / 2) / C.zoom + C.y]; };
   C.centerOn = function (tx, ty, snap) { const p = C.tileToWorld(tx + 0.5, ty + 0.5, 1); if (snap) { C.x = p[0]; C.y = p[1]; C.gx = null; } else { C.gx = p[0]; C.gy = p[1]; } };
   // screen position -> tile (accounts for elevation); returns {x, y, fx, fy}
+  // the building whose drawn body is under the pointer (the one in front wins), so a tap on a wall or a roof selects
+  // that building and not the ground tile hidden behind it
+  C.pickBuilding = function (sx, sy) {
+    const W = M.world, w = C.toWorld(sx, sy), S = M.Sprites;
+    for (let z = 300; z >= 4; z -= 4) for (let k = 4; k >= 0; k--) {
+      const wy = w[1] + k * EL + z, x = Math.floor((w[0] / TW + wy / TH) / 2), y = Math.floor((wy / TH - w[0] / TW) / 2);
+      if (!W.inb(x, y) || W.eh(y * W.n + x) !== k) continue;
+      const b = W.at(x, y); if (!b) continue;
+      const sp = S.of(b), h = sp ? sp.top * (b.built < 1 ? b.built : 1) * 0.92 : 0;
+      if (h >= z) return b;
+    }
+    return null;
+  };
   C.pick = function (sx, sy) {
     const W = M.world, w = C.toWorld(sx, sy);
     for (let k = 4; k >= 0; k--) {

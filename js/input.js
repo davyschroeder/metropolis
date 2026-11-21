@@ -71,7 +71,7 @@
     if (I.mode === 'pinch') { if (I.ptrs.size < 2) { I.mode = null; pinch = null; } return; }
     const W = M.world;
     if (I.mode === 'rpan' && I.moved < 6) { if (B.tool.type !== 'pointer') M.UI.cancelTool(); else M.UI.closePanel(); }
-    else if (I.mode === 'panclick' && I.moved < 7 && I.tile && W.inb(I.tile.x, I.tile.y)) { const b = W.at(I.tile.x, I.tile.y); M.Audio.play('click'); if (b) M.UI.inspect(b); else M.UI.inspectTile(I.tile.x, I.tile.y); }
+    else if (I.mode === 'panclick' && I.moved < 7 && I.tile && W.inb(I.tile.x, I.tile.y)) { const b = M.Camera.pickBuilding(e.clientX, e.clientY) || W.at(I.tile.x, I.tile.y); M.Audio.play('click'); if (b) M.UI.inspect(b); else M.UI.inspectTile(I.tile.x, I.tile.y); }
     else if (I.mode === 'tool') commit();
     I.mode = null;
     if (e.pointerType !== 'mouse') { Rn.hover = null; if (B.tool.type !== 'pointer') { Rn.preview = null; M.UI.cursorInfo(null); } }
