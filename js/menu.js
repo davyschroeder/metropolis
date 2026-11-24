@@ -35,7 +35,7 @@
   };
   Mn.frame = function (dt) {
     if (M.mode !== 'menu' || !M.world) return; Mn.t += dt; const C = M.Camera, p = C.tileToWorld(M.world.start.x, M.world.start.y, 1);
-    C.gx = null; C.x = p[0] + Math.sin(Mn.t * 0.045) * 420; C.y = p[1] + Math.sin(Mn.t * 0.031 + 1) * 150;
+    C.gx = null; C.x = p[0] - (C.w > 820 ? 210 / C.zoom : 0) + Math.sin(Mn.t * 0.045) * 260; C.y = p[1] + Math.sin(Mn.t * 0.031 + 1) * 150;
     if (Mn.demo && M.settings.daynight) M.city.tod = (M.city.tod + dt / 150) % 1;
   };
 
@@ -45,14 +45,14 @@
     $('#ui').classList.add('hidden'); U.closeModal(); const m = $('#menu'); m.classList.remove('hidden'); M.Render.preview = null; M.Render.sel = null; M.Render.hover = null;
     const draw = function (saves) {
       Mn.saves = saves; const hasCity = !Mn.demo && M.city;
-      m.innerHTML = '<div class="mcol"><div class="logo"><span>METROPOLIS</span><small>City Builder</small></div>' +
+      m.innerHTML = '<div class="mcol"><div class="logo"><svg class="brand-mark" viewBox="0 0 60 48" fill="none" aria-hidden="true"><path d="M3 43h54M8 39V21l12-7v25M24 39V9l12-6v36M40 39V17l12 7v15" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="M12 25l4-2m-4 9 4-2M28 13l4-2m-4 9 4-2m-4 9 4-2M44 25l4 2m-4 5 4 2" stroke="currentColor" stroke-width="1.6"/></svg><em class="brand-kicker">SKYLINE EDITION</em><span>METROPOLIS</span><small>City Builder</small><p class="brand-line">From the first road to a living skyline.</p></div>' +
         (hasCity ? '<button class="mbtn primary" data-act="m-resume">Return to ' + esc(M.city.name) + '</button>' : saves.length ? '<button class="mbtn primary" data-act="m-continue">Continue<small>' + esc(saves[0].name) + '</small></button>' : '') +
         '<button class="mbtn' + (!hasCity && !saves.length ? ' primary' : '') + '" data-act="m-new">New Game</button>' +
         '<button class="mbtn" data-act="m-load"' + (saves.length ? '' : ' disabled') + '>Load Game</button>' +
         (hasCity ? '<button class="mbtn" data-act="m-save">Save Game</button>' : '') +
         '<button class="mbtn" data-act="m-tutorial">Tutorial<small>Learn the basics in 5 minutes</small></button>' +
         '<button class="mbtn" data-act="m-options">Options</button><button class="mbtn" data-act="m-stats">Statistics</button><button class="mbtn" data-act="m-ach">Achievements</button><button class="mbtn" data-act="m-help">How to Play</button>' +
-        '<div class="foot">Version ' + M.VERSION + ', ' + (M.Save.persistent ? 'saves are stored in this browser' : 'storage unavailable here: saves last for this session only') + '</div></div>';
+        '<div class="foot">Version ' + M.VERSION + ', ' + (M.Save.persistent ? 'saves are stored in this browser' : 'storage unavailable here: saves last for this session only') + '</div></div><div class="menu-caption"><i></i><b>A CITY OF YOUR OWN</b>BUILD · MANAGE · THRIVE</div>';
     };
     draw(Mn.saves || []); M.Save.list().then(draw);
   };

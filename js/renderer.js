@@ -69,17 +69,17 @@
     const n = W.n, i = y * n + x, t = W.terr[i], h = M.hash(x, y, seed + 3); let col;
     if (t === 1) {
       const f = M.clamp((M.fbm(x * 0.06, y * 0.06, seed + 31, 3) - 0.28) * 2.3, 0, 1), dry = M.clamp((M.fbm(x * 0.045 + 7, y * 0.045, seed + 77, 2) - 0.58) * 3, 0, 0.5);
-      col = M.mix(M.mix('#5c9a47', '#86bf5b', f), '#a9b660', dry); col = M.shade(col, 0.975 + h * 0.05);
-    } else if (t === 2) col = M.mix('#dccb92', '#cfbd84', h); else col = M.mix('#8d987c', '#9aa386', M.fbm(x * 0.2, y * 0.2, seed + 3, 2));
+      col = M.mix(M.mix('#628b51', '#91b96b', f), '#b7b477', dry); col = M.shade(col, 0.975 + h * 0.05);
+    } else if (t === 2) col = M.mix('#ded2ac', '#c8b98d', h); else col = M.mix('#8d987c', '#9aa386', M.fbm(x * 0.2, y * 0.2, seed + 3, 2));
     const ee = W.elev[i]; if (ee > 1) col = M.shade(col, 1 + (ee - 1) * 0.075);
     return col;
   }
   function drawTop(c, W, x, y, sx, sy) {
     const n = W.n, i = y * n + x, t = W.terr[i], h = M.hash(x, y, seed + 3), col = tileColor(W, x, y);
     dia(c, sx, sy); c.fillStyle = col; c.fill(); c.strokeStyle = col; c.lineWidth = 0.8; c.stroke();
-    for (let k = 0; k < 4; k++) {
+    for (let k = 0; k < 9; k++) {
       const px = sx + (M.hash(x, y, k + 10) - 0.5) * 34, py = sy + TH + (M.hash(x, y, k + 20) - 0.5) * 13;
-      c.fillStyle = k % 2 ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'; c.fillRect(px, py, t === 1 ? 2 : 3, 1);
+      c.fillStyle = k % 2 ? 'rgba(246,241,190,0.15)' : 'rgba(39,68,40,0.12)'; c.fillRect(px, py, t === 1 ? 1.6 : 2.5, 0.8);
       if (t === 3 && k < 2) { c.fillStyle = 'rgba(70,74,66,0.35)'; c.fillRect(px - 2, py, 4, 2); c.fillStyle = 'rgba(230,232,224,0.25)'; c.fillRect(px - 2, py - 1, 3, 1); }
       if (t === 1 && k === 0 && h < 0.3) { c.fillStyle = 'rgba(40,90,30,0.35)'; c.fillRect(px + 4, py - 2, 1, 3); c.fillRect(px + 6, py - 1, 1, 2); }
     }
@@ -161,9 +161,11 @@
     drawBanks(c, W, x, y, sx, by, 0, 2);
   }
   function drawWater(c, W, x, y, sx, sy) {
-    const n = W.n, i = y * n + x, d = W.wdepth[i], ad = avgDepth(W, x, y), dv = M.clamp((ad - 0.6) / 3.2 + (M.fbm(x * 0.15, y * 0.15, seed + 8, 2) - 0.5) * 0.35, 0, 1), col = M.mix('#55b7e2', '#1c5b91', dv);
+    const n = W.n, i = y * n + x, d = W.wdepth[i], ad = avgDepth(W, x, y), dv = M.clamp((ad - 0.6) / 3.2 + (M.fbm(x * 0.15, y * 0.15, seed + 8, 2) - 0.5) * 0.35, 0, 1), col = M.mix('#5dbbb8', '#205a78', dv);
     dia(c, sx, sy); c.fillStyle = col; c.fill(); c.strokeStyle = col; c.lineWidth = 0.8; c.stroke();
-    if (d <= 1) { dia(c, sx, sy); c.fillStyle = 'rgba(120,220,210,0.18)'; c.fill(); }
+    if (d <= 1) { dia(c, sx, sy); c.fillStyle = 'rgba(168,232,207,0.20)'; c.fill(); }
+    c.save();dia(c,sx,sy);c.clip();
+    for(let j=0;j<3;j++){const u=.19+M.hash(x,y,60+j)*.58,v=.12+M.hash(x,y,70+j)*.76,px=sx+(u-v)*TW,py=sy+(u+v)*TH,L=3+M.hash(x,y,80+j)*7;c.beginPath();c.moveTo(px-L,py);c.quadraticCurveTo(px,py-1.2,px+L,py);c.strokeStyle=j===1?'rgba(17,71,90,.12)':'rgba(206,245,231,.13)';c.lineWidth=.75;c.stroke();}c.restore();
     c.strokeStyle = 'rgba(255,255,255,0.3)'; c.lineWidth = 1.2; c.beginPath();
     const kq = 0.34, wp = function (u, v, mv) { const px = sx + (u - v) * TW, py = sy + (u + v) * TH; if (mv) c.moveTo(px, py); else c.lineTo(px, py); }; // wet line just behind land that stands in front of this tile
     if (y < n - 1 && W.elev[i + n] === 1) { wp(0.08, 1 - kq, true); wp(0.92 - kq, 1 - kq); }
@@ -397,7 +399,7 @@
         if (z > 0.6 && M.ROADS[rt].lights && M.Roads.driveCount(W, i) >= 3) { const it = item(x + y + 1.3, 5); it.x = (x - y) * TW; it.y = (x + y) * TH - e * EL; it.i = i; }
       }
     }
-    if (glints) { g.strokeStyle = nf > 0.5 ? 'rgba(160,190,230,0.22)' : 'rgba(255,255,255,0.38)'; g.lineWidth = 1; g.stroke(); }
+    if (glints) { g.strokeStyle = nf > 0.5 ? 'rgba(160,213,230,0.24)' : 'rgba(222,255,238,0.45)'; g.lineWidth = 1; g.stroke(); }
     // animated surf along the shore
     if (foam.length) {
       g.beginPath();
@@ -424,7 +426,7 @@
         for (const p of P) { pts.push(Cam.tileToWorld(p[0], p[1], e)); pts.push(Cam.tileToWorld(p[0] + ux * L, p[1] + uy * L, e)); }
         const h = hull(pts); g.moveTo(h[0][0], h[0][1]); for (let k = 1; k < h.length; k++) g.lineTo(h[k][0], h[k][1]); g.closePath();
       }
-      g.fillStyle = 'rgba(16,28,40,' + (0.36 * (1 - nf) * (1 - (city.weather.cloudI || 0) * 0.6)).toFixed(3) + ')'; g.fill();
+      g.fillStyle = 'rgba(22,47,52,' + (0.32 * (1 - nf) * (1 - (city.weather.cloudI || 0) * 0.6)).toFixed(3) + ')'; g.fill();
     }
     // ---- overlays (under objects) ----
     if (ov) {
@@ -545,7 +547,7 @@
     }
     // soft vignette
     if (M.settings.quality !== 'low') {
-      const vk = cw2 + 'x' + ch2; if (vk !== vignKey) { vignKey = vk; vign = S.mk(cw2 / 4, ch2 / 4); const vg = vign.getContext('2d'), gr = vg.createRadialGradient(cw2 / 8, ch2 / 8, Math.min(cw2, ch2) / 10, cw2 / 8, ch2 / 8, Math.hypot(cw2, ch2) / 8); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(6,12,24,0.42)'); vg.fillStyle = gr; vg.fillRect(0, 0, cw2, ch2); }
+      const vk = cw2 + 'x' + ch2; if (vk !== vignKey) { vignKey = vk; vign = S.mk(cw2 / 4, ch2 / 4); const vg = vign.getContext('2d'), gr = vg.createRadialGradient(cw2 / 8, ch2 / 8, Math.min(cw2, ch2) / 10, cw2 / 8, ch2 / 8, Math.hypot(cw2, ch2) / 8); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(9,27,37,0.25)'); vg.fillStyle = gr; vg.fillRect(0, 0, cw2, ch2); }
       g.drawImage(vign, 0, 0, cw2, ch2);
     }
     const tE = performance.now(), st = Rn.stats; Rn.ms += (tE - tA - Rn.ms) * 0.1; st.tGround += (tB - tA - st.tGround) * 0.1; st.tScan += (tC - tB - st.tScan) * 0.1; st.tObj += (tD - tC - st.tObj) * 0.1; st.tPost += (tE - tD - st.tPost) * 0.1;
