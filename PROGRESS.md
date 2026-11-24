@@ -223,3 +223,10 @@ The old interface was the stock "dark glass" kit (translucent navy panels, blur,
 - Sliders: ink track with a yellow rectangular handle; toggles are square switches.
 - **Tap picking**: `Camera.pickBuilding(sx, sy)` selects the building whose drawn body is under the pointer (the front one wins); before, only the ground tile counted, so a tap on a roof selected the land behind it. In the tutorial's inspect step a missed tap no longer leaves a tile sheet over the houses, and a hint appears.
 - The website sync must copy `fonts/` too.
+
+## 0.14.0 — Skyline Edition
+Visual revision supplied by the owner (made with ChatGPT), on top of 0.13.0; see SKYLINE-EDITION.md. It replaces the signage interface of 0.13.0.
+- `css/visual-edition.css` is loaded after `style.css` and overrides its tokens and components: dark teal plates, ivory sheets, mint highlight, system font, rounded corners. The Metro Sign font files stay in `fonts/` but are no longer used by the interface.
+- Main menu: logo mark, "Skyline Edition" line, a shaded backdrop over the live city, a caption at the bottom right.
+- sprites.js: roof seams and light edges, gradient walls, framed and reflective windows, new trees; renderer.js: terrain, water ripples, road shading and curbs, night tint `S.NIGHT = [86,114,164]`.
+- Fix on top: on a phone held sideways the tutorial card slid under the build tray, so Next could not be tapped. The card is compact there and above the tray.
