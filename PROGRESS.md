@@ -230,3 +230,6 @@ Visual revision supplied by the owner (made with ChatGPT), on top of 0.13.0; see
 - Main menu: logo mark, "Skyline Edition" line, a shaded backdrop over the live city, a caption at the bottom right.
 - sprites.js: roof seams and light edges, gradient walls, framed and reflective windows, new trees; renderer.js: terrain, water ripples, road shading and curbs, night tint `S.NIGHT = [86,114,164]`.
 - Fix on top: on a phone held sideways the tutorial card slid under the build tray, so Next could not be tapped. The card is compact there and above the tray.
+
+## 0.14.1
+- Fix: panning at night left day-lit strips on some phones. The newly exposed strips of the scrolling ground cache were tinted with a 'multiply' fill inside a clip, which some mobile GPUs ignore. The strips are still painted clipped (fast), but the night tint is now applied on a small unclipped scratch canvas and copied back (`gsc` in renderer.js). The horizontal and vertical strips no longer overlap at the corner, so nothing is tinted twice. Chunk culling for a strip uses the strip's own bounds.

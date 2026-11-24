@@ -14,7 +14,7 @@
   Rn.DCOL = DCOL;
   const pool = [], list = []; let nItems = 0;
   const parts = []; const icons = []; const lamps = []; let glow = null, cloudSp = null; const clouds = [];
-  let gcv = null, gctx = null, gcv2 = null, gctx2 = null, gsx = 0, gsy = 0, gKey = '', gValid = false, groundVer = 1;
+  let gcv = null, gctx = null, gcv2 = null, gctx2 = null, gsc = null, gscx = null, gsx = 0, gsy = 0, gKey = '', gValid = false, groundVer = 1;
   // ---- light textures (additive) ----
   const glows = {}, LIGHT = { lamp: '255,186,105', flood: '232,240,255', cyan: '120,220,255', red: '255,52,40', head: '255,246,220', tail: '255,40,28', pool: '255,176,92' };
   function glowOf(k) {
@@ -325,20 +325,22 @@
     // snap the camera to whole device pixels so the cached ground can be scrolled without blurring
     const zd = z * dpr, camX = Math.round(Cam.x * zd) / zd, camY = Math.round(Cam.y * zd) / zd;
     const vx0 = camX - cw2 / 2 / z, vx1 = camX + cw2 / 2 / z, vy0 = camY - ch2 / 2 / z, vy1 = camY + ch2 / 2 / z;
-    const world = function (c) { c.setTransform(zd, 0, 0, zd, dpr * (cw2 / 2 + shx) - camX * zd, dpr * (ch2 / 2 + shy) - camY * zd); };
+    const world = function (c, ox, oy) { c.setTransform(zd, 0, 0, zd, dpr * (cw2 / 2 + shx) - camX * zd - (ox || 0), dpr * (ch2 / 2 + shy) - camY * zd - (oy || 0)); };
     // ---- ground: terrain chunks + night tint, kept in a screen-sized layer. When the camera pans, the layer is
     // shifted and only the newly exposed strips are painted, instead of recompositing every chunk each frame.
     const L = W.limit, nStep = Math.round(nf * 24), gk = z.toFixed(4) + ',' + cv.width + ',' + cv.height + ',' + groundVer + ',' + nStep + ',' + L.x0 + ',' + L.y0 + ',' + L.x1 + ',' + L.y1 + ',' + M.mode;
     if (!gcv || gcv.width !== cv.width || gcv.height !== cv.height) { gcv = S.mk(cv.width, cv.height); gctx = gcv.getContext('2d', { alpha: false }); gcv2 = S.mk(cv.width, cv.height); gctx2 = gcv2.getContext('2d', { alpha: false }); gValid = false; }
+    // paints the ground into c, or (rects) only into those screen rectangles. The night tint is applied separately for
+    // strips (tintStrip): some mobile GPUs ignored a 'multiply' fill inside a clip, so panning left day-lit strips.
     const paintGround = function (c, rects) {
-      c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
-      if (rects) { c.beginPath(); for (const r of rects) c.rect(r[0], r[1], r[2], r[3]); c.clip(); }
+      c.save(); c.setTransform(1, 0, 0, 1, 0, 0); let bx0 = vx0, bx1 = vx1, by0 = vy0, by1 = vy1;
+      if (rects) { c.beginPath(); bx0 = by0 = 1e9; bx1 = by1 = -1e9; for (const r of rects) { c.rect(r[0], r[1], r[2], r[3]); bx0 = Math.min(bx0, vx0 + r[0] / zd); bx1 = Math.max(bx1, vx0 + (r[0] + r[2]) / zd); by0 = Math.min(by0, vy0 + r[1] / zd); by1 = Math.max(by1, vy0 + (r[1] + r[3]) / zd); } c.clip(); }
       const sky = c.createLinearGradient(0, 0, 0, cv.height); sky.addColorStop(0, nf > 0.5 ? '#0b1220' : '#1c2c3c'); sky.addColorStop(1, nf > 0.5 ? '#111a2a' : '#2a3d4e'); c.fillStyle = sky; c.fillRect(0, 0, cv.width, cv.height);
       world(c); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'low';
       const lod = z < 0.55 ? 0 : (z * dpr >= 1.45 && M.settings.quality === 'high' ? 2 : 1), cwid = 2 * CH * TW, chei = 2 * CH * TH + 62; let built = 0, drawn = 0, complete = true;
       for (let s = 0; s <= 2 * (cw - 1); s++) for (let cx = Math.max(0, s - cw + 1); cx <= Math.min(cw - 1, s); cx++) {
         const cy = s - cx, wx0 = (cx - cy) * CH * TW - CH * TW, wy0 = (cx + cy) * CH * TH - 44;
-        if (wx0 > vx1 || wx0 + cwid < vx0 || wy0 > vy1 || wy0 + chei < vy0) continue;
+        if (wx0 > bx1 + 40 || wx0 + cwid < bx0 - 40 || wy0 > by1 + 40 || wy0 + chei < by0 - 40) continue;
         const key = (cy * cw + cx) * 3 + lod; let ent = chunks.get(key);
         if (!ent) { if (built >= 5) { complete = false; continue; } ent = { c: null, ver: 0, used: 0 }; chunks.set(key, ent); }
         if (ent.ver !== chunkVer[cy * cw + cx]) { if (built < 5) { renderChunk(ent, cx, cy, lod); built++; } else complete = false; }
@@ -352,7 +354,7 @@
         c.fillStyle = 'rgba(8,14,24,0.34)'; c.beginPath(); rp(0, 0, n, L.y0); rp(0, L.y1 + 1, n, n); rp(0, L.y0, L.x0, L.y1 + 1); rp(L.x1 + 1, L.y0, n, L.y1 + 1); c.fill();
         c.beginPath(); rp(L.x0, L.y0, L.x1 + 1, L.y1 + 1); c.strokeStyle = 'rgba(255,255,255,0.55)'; c.lineWidth = 1.5 / z; c.setLineDash([8 / z, 6 / z]); c.stroke(); c.setLineDash([]);
       }
-      if (nStep > 0) { const q = nStep / 24; c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'multiply'; c.fillStyle = 'rgb(' + Math.round(255 - q * (255 - NT[0])) + ',' + Math.round(255 - q * (255 - NT[1])) + ',' + Math.round(255 - q * (255 - NT[2])) + ')'; c.fillRect(0, 0, cv.width, cv.height); c.globalCompositeOperation = 'source-over'; }
+      if (nStep > 0 && !rects) { const q = nStep / 24; c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'multiply'; c.fillStyle = 'rgb(' + Math.round(255 - q * (255 - NT[0])) + ',' + Math.round(255 - q * (255 - NT[1])) + ',' + Math.round(255 - q * (255 - NT[2])) + ')'; c.fillRect(0, 0, cv.width, cv.height); c.globalCompositeOperation = 'source-over'; }
       c.restore(); return complete;
     };
     const shaking = Cam.shake > 0, same = gValid && gk === gKey && !shaking;
@@ -363,8 +365,21 @@
       let t = gcv; gcv = gcv2; gcv2 = t; t = gctx; gctx = gctx2; gctx2 = t;
       const R = [], Wd = cv.width, Hd = cv.height;
       if (dxp > 0) R.push([0, 0, dxp, Hd]); else if (dxp < 0) R.push([Wd + dxp, 0, -dxp, Hd]);
-      if (dyp > 0) R.push([0, 0, Wd, dyp]); else if (dyp < 0) R.push([0, Hd + dyp, Wd, -dyp]);
-      gValid = paintGround(gctx, R); gsx = camX; gsy = camY;
+      const hx0 = dxp > 0 ? dxp : 0, hw = Wd - Math.abs(dxp); // the horizontal strip leaves out the corner the vertical one has
+      if (dyp > 0) R.push([hx0, 0, hw, dyp]); else if (dyp < 0) R.push([hx0, Hd + dyp, hw, -dyp]);
+      gValid = paintGround(gctx, R);
+      if (nStep > 0) { // tint each new strip on a small unclipped canvas and copy it back
+        const q = nStep / 24; gctx.save(); gctx.setTransform(1, 0, 0, 1, 0, 0);
+        for (const r of R) {
+          if (r[2] <= 0 || r[3] <= 0) continue;
+          if (!gsc || gsc.width < r[2] || gsc.height < r[3]) { gsc = S.mk(Math.max(r[2], gsc ? gsc.width : 0), Math.max(r[3], gsc ? gsc.height : 0)); gscx = gsc.getContext('2d', { alpha: false }); }
+          gscx.setTransform(1, 0, 0, 1, 0, 0); gscx.globalCompositeOperation = 'copy'; gscx.drawImage(gcv, r[0], r[1], r[2], r[3], 0, 0, r[2], r[3]);
+          gscx.globalCompositeOperation = 'multiply'; gscx.fillStyle = 'rgb(' + Math.round(255 - q * (255 - NT[0])) + ',' + Math.round(255 - q * (255 - NT[1])) + ',' + Math.round(255 - q * (255 - NT[2])) + ')'; gscx.fillRect(0, 0, r[2], r[3]); gscx.globalCompositeOperation = 'source-over';
+          gctx.drawImage(gsc, 0, 0, r[2], r[3], r[0], r[1], r[2], r[3]);
+        }
+        gctx.restore();
+      }
+      gsx = camX; gsy = camY;
     } else { gValid = paintGround(gctx, null) && !shaking; gKey = gk; gsx = camX; gsy = camY; }
     g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(gcv, 0, 0);
     world(g); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'low';
