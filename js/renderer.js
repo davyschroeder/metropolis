@@ -265,7 +265,11 @@
     if (sp.anim) {
       const an = sp.anim, x = bx + an.x, y = by + an.y;
       if (an.t === 'rotor') {
-        const spin = (b.on === false || b.stormOff > 0) ? 0.3 : Rn.time * (1.2 + M.city.weather.wind * 3) + b.id;
+        // the rotor keeps its own angle and speed: computing the angle as time × speed made it jump every time the
+        // wind changed. Speed eases towards the wind, and to zero when the turbine is off.
+        if (b.rf !== Rn.frame) { const dtr = Rn.frame - (b.rf || Rn.frame) > 2 ? 0 : Rn.dt, want = (b.on === false || b.stormOff > 0) ? 0 : 1.2 + M.city.weather.wind * 3;
+          if (b.rsp === undefined) { b.rsp = want; b.rph = b.id * 0.7; } b.rsp += (want - b.rsp) * Math.min(1, dtr * 0.8); b.rph = (b.rph + b.rsp * dtr) % 6.2832; b.rf = Rn.frame; }
+        const spin = b.rph;
         g.strokeStyle = nf > 0.5 ? '#8f98a8' : '#f4f6f7'; g.lineWidth = 2.2; g.lineCap = 'round'; g.beginPath();
         for (let k = 0; k < 3; k++) { const a = spin + k * 2.094; g.moveTo(x, y); g.lineTo(x + Math.cos(a) * an.r * 0.55, y + Math.sin(a) * an.r); }
         g.stroke(); g.lineCap = 'butt'; g.fillStyle = '#d0d4d8'; g.beginPath(); g.arc(x, y, 2, 0, 7); g.fill();
@@ -318,7 +322,7 @@
   // ---------------- frame ----------------
   Rn.draw = function (dt, adt) {
     const W = M.world, city = M.city; if (!W || !cv) return;
-    Rn.frame++; Rn.time += dt; const tA = performance.now(); S.blendBudget = 14; S.genMs = 0; S.tick = Rn.frame; if (Rn.frame % 150 === 0) S.trim();
+    Rn.frame++; Rn.time += dt; Rn.dt = dt; Rn.rainX = (Rn.rainX || 0) + dt * (0.18 + (M.city ? M.city.weather.wind : 0.5) * 0.25); const tA = performance.now(); S.blendBudget = 14; S.genMs = 0; S.tick = Rn.frame; if (Rn.frame % 150 === 0) S.trim();
     const n = W.n, z = Cam.zoom, cw2 = Cam.w, ch2 = Cam.h, T = M.Traffic;
     const nf = M.settings.daynight ? nightFactor(city.tod) : 0, dark = nf * 0.6, NT = S.NIGHT, nightMul = 'rgb(' + Math.round(255 - nf * (255 - NT[0])) + ',' + Math.round(255 - nf * (255 - NT[1])) + ',' + Math.round(255 - nf * (255 - NT[2])) + ')'; Rn.night = nf; if ((nf < 0.02 || nf > 0.98) && Rn.frame % 60 === 0) S.dropBlends();
     let shx = 0, shy = 0; if (Cam.shake > 0) { shx = (M.rand() - 0.5) * 10 * Cam.shake; shy = (M.rand() - 0.5) * 8 * Cam.shake; }
@@ -551,7 +555,7 @@
         const cnt = Math.round(70 + rainI * 330), sl = 0.18 + w.wind * 0.25, a = (0.14 + rainI * 0.26).toFixed(3);
         g.strokeStyle = 'rgba(205,220,240,' + a + ')'; g.lineWidth = 1; g.beginPath();
         for (let k = 0; k < cnt; k++) {
-          const sp = 820 + M.hash(k, 3, 2) * 420, len = 9 + M.hash(k, 4, 2) * 9, x = (M.hash(k, 1, 2) * (cw2 + 300) + time * sp * sl) % (cw2 + 300) - 150, y = (M.hash(k, 2, 2) * (ch2 + 40) + time * sp) % (ch2 + 40) - 20;
+          const sp = 820 + M.hash(k, 3, 2) * 420, len = 9 + M.hash(k, 4, 2) * 9, x = (M.hash(k, 1, 2) * (cw2 + 300) + Rn.rainX * sp) % (cw2 + 300) - 150, y = (M.hash(k, 2, 2) * (ch2 + 40) + time * sp) % (ch2 + 40) - 20;
           g.moveTo(x, y); g.lineTo(x + len * sl, y + len);
         }
         g.stroke();

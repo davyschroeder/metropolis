@@ -2,7 +2,7 @@
 /* METROPOLIS – core: namespace, math, RNG, noise, colours, event bus */
 var M = {};
 (function () {
-  M.VERSION = '0.14.1';
+  M.VERSION = '0.14.2';
   M.TW = 32; M.TH = 16; M.EL = 10; M.CH = 16;
   // directions: 0=N(y-1) 1=E(x+1) 2=S(y+1) 3=W(x-1)
   M.DX = [0, 1, 0, -1]; M.DY = [-1, 0, 1, 0];

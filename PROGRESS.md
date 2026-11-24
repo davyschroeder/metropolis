@@ -233,3 +233,7 @@ Visual revision supplied by the owner (made with ChatGPT), on top of 0.13.0; see
 
 ## 0.14.1
 - Fix: panning at night left day-lit strips on some phones. The newly exposed strips of the scrolling ground cache were tinted with a 'multiply' fill inside a clip, which some mobile GPUs ignore. The strips are still painted clipped (fast), but the night tint is now applied on a small unclipped scratch canvas and copied back (`gsc` in renderer.js). The horizontal and vertical strips no longer overlap at the corner, so nothing is tinted twice. Chunk culling for a strip uses the strip's own bounds.
+
+## 0.14.2
+- Fix: wind turbine blades jerked. Their angle was `time × speed`, and the speed follows the wind, which changes every game day, so each change made the angle jump. Each turbine now keeps its own angle and speed (`b.rph`, `b.rsp`), integrated per frame; the speed eases to the wind and to zero when the turbine is off or shut down by a storm. Measured: rotation speed varies by under 4 % between frames while days tick at top speed.
+- Same kind of jump fixed for rain: the sideways drift is now integrated (`Rn.rainX`) instead of `time × slant`.
